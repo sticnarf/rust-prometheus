@@ -34,7 +34,7 @@ pub trait LocalMetric {
 }
 
 pub trait MayFlush: LocalMetric {
-    fn may_flush(&self, last_flash: &Cell<Instant>, flush_interval_sec: f64) {
+    fn try_flush(&self, last_flash: &Cell<Instant>, flush_interval_sec: f64) {
         let now = Instant::now();
         let last_tick = last_flash.get();
         if now.duration_since(last_tick).as_f64() < 1.0 {
@@ -43,6 +43,8 @@ pub trait MayFlush: LocalMetric {
         self.flush();
         last_flash.set(now);
     }
+
+    fn may_flush(&self);
 }
 
 /// A struct that bundles the options for creating most [`Metric`](::core::Metric) types.

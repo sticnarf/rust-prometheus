@@ -61,6 +61,12 @@ impl ::prometheus::local::LocalMetric for LocalHttpRequestStatistics {
     }
 }
 
+impl ::prometheus::local::MayFlush for LocalHttpRequestStatistics {
+    fn may_flush(&self) {
+        MayFlush::try_flush(self, &self.last_flush, 1.0)
+    }
+}
+
 lazy_static! {
     pub static ref HTTP_COUNTER_VEC: IntCounterVec =
         register_int_counter_vec!(
@@ -71,21 +77,8 @@ lazy_static! {
 }
 
 thread_local! {
-    static THREAD_LAST_TICK_TIME: Cell<Instant> = Cell::new(Instant::now());
 
     pub static TLS_HTTP_COUNTER: LocalHttpRequestStatistics = LocalHttpRequestStatistics::from(&HTTP_COUNTER_VEC);
-}
-
-pub fn may_flush_metrics() {
-    THREAD_LAST_TICK_TIME.with(|tls_last_tick| {
-        let now = Instant::now();
-        let last_tick = tls_last_tick.get();
-        if now.duration_since(last_tick).as_f64() < 1.0 {
-            return;
-        }
-        tls_last_tick.set(now);
-        TLS_HTTP_COUNTER.with(|m| m.flush());
-    });
 }
 
 /// This example demonstrates the usage of using static metrics with local metrics.

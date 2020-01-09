@@ -160,7 +160,7 @@ pub mod local {
     */
     pub use super::counter::{LocalCounter, LocalCounterVec, LocalIntCounter, LocalIntCounterVec};
     pub use super::histogram::{LocalHistogram, LocalHistogramTimer, LocalHistogramVec};
-    pub use super::metrics::LocalMetric;
+    pub use super::metrics::{LocalMetric,MayFlush};
 }
 
 pub mod core {
