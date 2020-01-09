@@ -15,6 +15,7 @@ use prometheus::core::AtomicI64;
 #[allow(unused_imports)]
 use prometheus::local::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::thread::LocalKey;
 
 #[allow(missing_copy_implementations)]
@@ -137,8 +138,13 @@ thread_local! {
 }
 
 lazy_static! {
-    pub static ref TLS_HTTP_COUNTER: LocalHttpRequestStatistics = LocalHttpRequestStatistics::from(&TLS_HTTP_COUNTER_INNER);
+    pub static ref TLS_HTTP_COUNTER: LocalHttpRequestStatistics =
+        LocalHttpRequestStatistics::from(&TLS_HTTP_COUNTER_INNER);
 }
+//todo:
+//    | |_^ `(dyn for<'r> std::ops::Fn(&'r LocalHttpRequestStatisticsInner)
+// -> &'r prometheus::core::GenericLocalCounter<prometheus::core::AtomicI64> + 'static)`
+// cannot be shared between threads safely
 
 /// This example demonstrates the usage of using static metrics with local metrics.
 
