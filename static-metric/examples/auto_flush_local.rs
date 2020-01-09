@@ -16,15 +16,15 @@ use prometheus::local::*;
 use std::collections::HashMap;
 
 #[allow(missing_copy_implementations)]
-pub struct LocalHttpRequestStatistics {
+pub struct LocalHttpRequestStatisticsInner {
     pub foo: LocalIntCounter,
     pub bar: LocalIntCounter,
     last_flush: Cell<Instant>,
 }
 
-impl LocalHttpRequestStatistics {
-    pub fn from(m: &IntCounterVec) -> LocalHttpRequestStatistics {
-        LocalHttpRequestStatistics {
+impl LocalHttpRequestStatisticsInner {
+    pub fn from(m: &IntCounterVec) -> LocalHttpRequestStatisticsInner {
+        LocalHttpRequestStatisticsInner {
             foo: m
                 .with(&{
                     let mut coll = HashMap::new();
@@ -55,13 +55,13 @@ impl LocalHttpRequestStatistics {
     }
 }
 
-impl ::prometheus::local::LocalMetric for LocalHttpRequestStatistics {
+impl ::prometheus::local::LocalMetric for LocalHttpRequestStatisticsInner {
     fn flush(&self) {
-        LocalHttpRequestStatistics::flush(self);
+        LocalHttpRequestStatisticsInner::flush(self);
     }
 }
 
-impl ::prometheus::local::MayFlush for LocalHttpRequestStatistics {
+impl ::prometheus::local::MayFlush for LocalHttpRequestStatisticsInner {
     fn may_flush(&self) {
         MayFlush::try_flush(self, &self.last_flush, 1.0)
     }
@@ -78,7 +78,7 @@ lazy_static! {
 
 thread_local! {
 
-    pub static TLS_HTTP_COUNTER: LocalHttpRequestStatistics = LocalHttpRequestStatistics::from(&HTTP_COUNTER_VEC);
+    pub static TLS_HTTP_COUNTER: LocalHttpRequestStatisticsInner = LocalHttpRequestStatisticsInner::from(&HTTP_COUNTER_VEC);
 }
 
 /// This example demonstrates the usage of using static metrics with local metrics.
