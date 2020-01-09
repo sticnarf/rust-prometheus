@@ -133,10 +133,12 @@ lazy_static! {
 }
 
 thread_local! {
-
     pub static TLS_HTTP_COUNTER_INNER: LocalHttpRequestStatisticsInner = LocalHttpRequestStatisticsInner::from(&HTTP_COUNTER_VEC);
 }
-pub static TLS_HTTP_COUNTER: LocalHttpRequestStatistics = LocalHttpRequestStatistics::from(&TLS_HTTP_COUNTER_INNER);
+
+lazy_static! {
+    pub static ref TLS_HTTP_COUNTER: LocalHttpRequestStatistics = LocalHttpRequestStatistics::from(&TLS_HTTP_COUNTER_INNER);
+}
 
 /// This example demonstrates the usage of using static metrics with local metrics.
 
