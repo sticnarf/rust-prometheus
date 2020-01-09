@@ -11,9 +11,11 @@ use std::cell::Cell;
 use coarsetime::Instant;
 use prometheus::*;
 
+use prometheus::core::{GenericLocalCounter, AtomicI64};
 #[allow(unused_imports)]
 use prometheus::local::*;
 use std::collections::HashMap;
+use std::thread::LocalKey;
 
 #[allow(missing_copy_implementations)]
 struct LocalHttpRequestStatisticsInner {
@@ -67,6 +69,25 @@ impl ::prometheus::local::MayFlush for LocalHttpRequestStatisticsInner {
     }
 }
 
+struct LocalHttpRequestStatistics {
+    inner: LocalHttpRequestStatisticsInner,
+}
+
+struct LocalHttpRequestStatisticsDelegator {
+    root: &'static LocalKey<LocalHttpRequestStatisticsInner>,
+    path: dyn Fn(&LocalHttpRequestStatisticsInner) -> &LocalIntCounter,
+}
+
+impl AFLocalCounterDelegator<LocalHttpRequestStatisticsInner, AtomicI64> for LocalHttpRequestStatisticsDelegator {
+    fn get_root_metric(&self) -> &'static LocalKey<LocalHttpRequestStatisticsInner> {
+        self.root
+    }
+
+    fn get_counter(&self, root_metric: &'static LocalHttpRequestStatisticsInner) -> &'static LocalIntCounter {
+        (self.path)(root_metric)
+    }
+}
+
 lazy_static! {
     pub static ref HTTP_COUNTER_VEC: IntCounterVec =
         register_int_counter_vec!(
@@ -86,17 +107,12 @@ thread_local! {
 fn main() {
     TLS_HTTP_COUNTER.with(|m| m.foo.inc());
     TLS_HTTP_COUNTER.with(|m| m.foo.inc());
-    TLS_HTTP_COUNTER.with(|m| m.foo.inc());
-
-    assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo"]).get(), 0);
-
-    may_flush_metrics();
 
     assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo"]).get(), 0);
 
     ::std::thread::sleep(::std::time::Duration::from_secs(2));
 
-    may_flush_metrics();
+    TLS_HTTP_COUNTER.with(|m| m.foo.inc());
 
     assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo"]).get(), 3);
 }

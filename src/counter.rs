@@ -227,12 +227,15 @@ impl<P: Atomic> GenericLocalCounter<P> {
     }
 }
 
+///a delegator for static metrics to auto flush
 pub trait AFLocalCounterDelegator<T: 'static + MayFlush, P: Atomic> {
     #[inline]
+    ///get the root local metric for delegate
     fn get_root_metric(&self) -> &'static LocalKey<T>;
 
     #[inline]
-    fn get_counter(&self, root_metric: &T) -> &GenericLocalCounter<P>;
+    ///get the final counter for delegate
+    fn get_counter(&self, root_metric: &'static T) -> &'static GenericLocalCounter<P>;
 
     /// Increase the given value to the local counter,
     /// and try to flush to global
