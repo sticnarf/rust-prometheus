@@ -9,10 +9,11 @@ use std::sync::Arc;
 use crate::atomic64::{Atomic, AtomicF64, AtomicI64, Number};
 use crate::desc::Desc;
 use crate::errors::Result;
-use crate::metrics::{Collector, LocalMetric, Metric, Opts};
+use crate::metrics::{Collector, LocalMetric, MayFlush, Metric, Opts};
 use crate::proto;
 use crate::value::{Value, ValueType};
 use crate::vec::{MetricVec, MetricVecBuilder};
+use std::thread::LocalKey;
 
 /// The underlying implementation for [`Counter`](::Counter) and [`IntCounter`](::IntCounter).
 #[derive(Debug)]
@@ -223,6 +224,63 @@ impl<P: Atomic> GenericLocalCounter<P> {
         }
         self.counter.inc_by(*self.val.borrow());
         *self.val.borrow_mut() = P::T::from_i64(0);
+    }
+}
+
+pub trait AFLocalCounterDelegator<T: 'static + MayFlush, P: Atomic> {
+    #[inline]
+    fn get_root_metric(&self) -> &'static LocalKey<T>;
+
+    #[inline]
+    fn get_counter(&self, root_metric: &T) -> &GenericLocalCounter<P>;
+
+    /// Increase the given value to the local counter,
+    /// and try to flush to global
+    /// # Panics
+    ///
+    /// Panics in debug build if the value is < 0.
+    #[inline]
+    fn inc_by(&self, v: P::T) {
+        self.get_root_metric().with(|m| {
+            let counter = self.get_counter(m);
+            counter.inc_by(v);
+            m.may_flush();
+        })
+    }
+
+    /// Increase the local counter by 1,
+    /// and try to flush to global.
+    #[inline]
+    fn inc(&self) {
+        self.get_root_metric().with(|m| {
+            let counter = self.get_counter(m);
+            counter.inc();
+            m.may_flush();
+        })
+    }
+
+    /// Return the local counter value.
+    #[inline]
+    fn get(&self) {
+        self.get_root_metric().with(|m| {
+            let counter = self.get_counter(m);
+            counter.get();
+        })
+    }
+
+    /// Restart the counter, resetting its value back to 0.
+    #[inline]
+    fn reset(&self) {
+        self.get_root_metric().with(|m| {
+            let counter = self.get_counter(m);
+            counter.reset();
+        })
+    }
+
+    /// trigger flush of LocalKey<T>
+    #[inline]
+    fn flush(&self) {
+        self.get_root_metric().with(|m| m.flush())
     }
 }
 

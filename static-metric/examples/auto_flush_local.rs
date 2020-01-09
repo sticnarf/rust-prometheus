@@ -16,7 +16,7 @@ use prometheus::local::*;
 use std::collections::HashMap;
 
 #[allow(missing_copy_implementations)]
-pub struct LocalHttpRequestStatisticsInner {
+struct LocalHttpRequestStatisticsInner {
     pub foo: LocalIntCounter,
     pub bar: LocalIntCounter,
     last_flush: Cell<Instant>,
