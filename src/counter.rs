@@ -235,7 +235,7 @@ pub trait AFLocalCounterDelegator<T: 'static + MayFlush, P: Atomic> {
 
     #[inline]
     ///get the final counter for delegate
-    fn get_counter(&self, root_metric: &'static T) -> &'static GenericLocalCounter<P>;
+    fn get_counter<'a>(&self, root_metric: &'a T) -> &'a GenericLocalCounter<P>;
 
     /// Increase the given value to the local counter,
     /// and try to flush to global
