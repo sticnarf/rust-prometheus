@@ -70,20 +70,55 @@ impl ::prometheus::local::MayFlush for LocalHttpRequestStatisticsInner {
 }
 
 struct LocalHttpRequestStatistics {
-    inner: LocalHttpRequestStatisticsInner,
+    inner: &'static LocalKey<LocalHttpRequestStatisticsInner>,
+    pub foo: LocalHttpRequestStatisticsDelegator,
+    pub bar: LocalHttpRequestStatisticsDelegator,
+}
+
+impl LocalHttpRequestStatistics {
+    pub fn from(
+        inner: &'static LocalKey<LocalHttpRequestStatisticsInner>,
+    ) -> LocalHttpRequestStatistics {
+        let foo = LocalHttpRequestStatisticsDelegator {
+            root: &inner,
+            path: Box::new(|m| &m.foo),
+        };
+        let bar = LocalHttpRequestStatisticsDelegator {
+            root: &inner,
+            path: Box::new(|m| &m.bar),
+        };
+        LocalHttpRequestStatistics { inner, foo, bar }
+    }
+
+    pub fn try_get(&self, value: &str) -> Option<&LocalHttpRequestStatisticsDelegator> {
+        match value {
+            "foo" => Some(&self.foo),
+            "bar" => Some(&self.bar),
+            _ => None,
+        }
+    }
+
+    pub fn flush(&self) {
+        self.inner.with(|m| m.flush())
+    }
 }
 
 struct LocalHttpRequestStatisticsDelegator {
     root: &'static LocalKey<LocalHttpRequestStatisticsInner>,
-    path: dyn Fn(&LocalHttpRequestStatisticsInner) -> &LocalIntCounter,
+    path: Box<dyn Fn(&LocalHttpRequestStatisticsInner) -> &LocalIntCounter>,
 }
 
-impl AFLocalCounterDelegator<LocalHttpRequestStatisticsInner, AtomicI64> for LocalHttpRequestStatisticsDelegator {
+impl AFLocalCounterDelegator<LocalHttpRequestStatisticsInner, AtomicI64>
+for LocalHttpRequestStatisticsDelegator
+{
     fn get_root_metric(&self) -> &'static LocalKey<LocalHttpRequestStatisticsInner> {
         self.root
     }
 
-    fn get_counter<'a>(&self, root_metric: &'a LocalHttpRequestStatisticsInner) -> &'a LocalIntCounter {
+    fn get_counter<'a>(
+        &self,
+        root_metric: &'a LocalHttpRequestStatisticsInner,
+    ) -> &'a LocalIntCounter {
         (self.path)(root_metric)
     }
 }
@@ -99,20 +134,20 @@ lazy_static! {
 
 thread_local! {
 
-    pub static TLS_HTTP_COUNTER: LocalHttpRequestStatisticsInner = LocalHttpRequestStatisticsInner::from(&HTTP_COUNTER_VEC);
+    pub static TLS_HTTP_COUNTER_INNER: LocalHttpRequestStatisticsInner = LocalHttpRequestStatisticsInner::from(&HTTP_COUNTER_VEC);
 }
+pub static TLS_HTTP_COUNTER: LocalHttpRequestStatistics = LocalHttpRequestStatistics::from(&TLS_HTTP_COUNTER_INNER);
 
 /// This example demonstrates the usage of using static metrics with local metrics.
 
 fn main() {
-    TLS_HTTP_COUNTER.with(|m| m.foo.inc());
-    TLS_HTTP_COUNTER.with(|m| m.foo.inc());
+    TLS_HTTP_COUNTER.foo.inc();
+    TLS_HTTP_COUNTER.foo.inc();
 
-//    assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo"]).get(), 0);
-//
-//    ::std::thread::sleep(::std::time::Duration::from_secs(2));
-//
-//    TLS_HTTP_COUNTER.with(|m| m.foo.inc());
-//
-//    assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo"]).get(), 3);
+    assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo"]).get(), 0);
+
+    ::std::thread::sleep(::std::time::Duration::from_secs(2));
+
+    TLS_HTTP_COUNTER.foo.inc();
+    assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo"]).get(), 3);
 }
