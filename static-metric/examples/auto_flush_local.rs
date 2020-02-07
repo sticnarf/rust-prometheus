@@ -45,13 +45,7 @@ impl LocalHttpRequestStatisticsInner {
             last_flush: Cell::new(Instant::now()),
         }
     }
-    pub fn try_get(&self, value: &str) -> Option<&LocalIntCounter> {
-        match value {
-            "foo" => Some(&self.foo),
-            "bar" => Some(&self.bar),
-            _ => None,
-        }
-    }
+
     pub fn flush(&self) {
         self.foo.flush();
         self.bar.flush();
