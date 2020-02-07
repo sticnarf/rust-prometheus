@@ -10,13 +10,13 @@ use std::cell::Cell;
 
 use coarsetime::Instant;
 use prometheus::*;
-
 use prometheus::core::AtomicI64;
 #[allow(unused_imports)]
 use prometheus::local::*;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::thread::LocalKey;
+use std::mem;
+use std::mem::MaybeUninit;
 
 #[allow(missing_copy_implementations)]
 pub struct LocalHttpRequestStatisticsInner {
@@ -70,7 +70,7 @@ impl ::prometheus::local::MayFlush for LocalHttpRequestStatisticsInner {
     }
 }
 
-struct LocalHttpRequestStatistics {
+pub struct LocalHttpRequestStatistics {
     inner: &'static LocalKey<LocalHttpRequestStatisticsInner>,
     pub foo: LocalHttpRequestStatisticsDelegator,
     pub bar: LocalHttpRequestStatisticsDelegator,
@@ -80,14 +80,20 @@ impl LocalHttpRequestStatistics {
     pub fn from(
         inner: &'static LocalKey<LocalHttpRequestStatisticsInner>,
     ) -> LocalHttpRequestStatistics {
+        let x: LocalHttpRequestStatisticsInner = unsafe {
+            MaybeUninit::<LocalHttpRequestStatisticsInner>::uninit().assume_init()
+        };
         let foo = LocalHttpRequestStatisticsDelegator {
             root: &inner,
-            path: Box::new(|m| &m.foo),
+            offset:
+            &(x.foo) as *const LocalIntCounter as usize - (&x as *const LocalHttpRequestStatisticsInner as usize),
         };
         let bar = LocalHttpRequestStatisticsDelegator {
             root: &inner,
-            path: Box::new(|m| &m.bar),
+            offset:
+            &(x.bar) as *const LocalIntCounter as usize - (&x as *const LocalHttpRequestStatisticsInner as usize),
         };
+        mem::forget(x);
         LocalHttpRequestStatistics { inner, foo, bar }
     }
 
@@ -104,9 +110,9 @@ impl LocalHttpRequestStatistics {
     }
 }
 
-struct LocalHttpRequestStatisticsDelegator {
+pub struct LocalHttpRequestStatisticsDelegator {
     root: &'static LocalKey<LocalHttpRequestStatisticsInner>,
-    path: Box<dyn Fn(&LocalHttpRequestStatisticsInner) -> &LocalIntCounter>,
+    offset: usize,
 }
 
 impl AFLocalCounterDelegator<LocalHttpRequestStatisticsInner, AtomicI64>
@@ -120,7 +126,10 @@ for LocalHttpRequestStatisticsDelegator
         &self,
         root_metric: &'a LocalHttpRequestStatisticsInner,
     ) -> &'a LocalIntCounter {
-        (self.path)(root_metric)
+        unsafe {
+            &*((root_metric as *const LocalHttpRequestStatisticsInner as usize + self.offset)
+                as *const LocalIntCounter)
+        }
     }
 }
 
@@ -141,12 +150,6 @@ lazy_static! {
     pub static ref TLS_HTTP_COUNTER: LocalHttpRequestStatistics =
         LocalHttpRequestStatistics::from(&TLS_HTTP_COUNTER_INNER);
 }
-//todo:
-//    | |_^ `(dyn for<'r> std::ops::Fn(&'r LocalHttpRequestStatisticsInner)
-// -> &'r prometheus::core::GenericLocalCounter<prometheus::core::AtomicI64> + 'static)`
-// cannot be shared between threads safely
-
-/// This example demonstrates the usage of using static metrics with local metrics.
 
 fn main() {
     TLS_HTTP_COUNTER.foo.inc();
