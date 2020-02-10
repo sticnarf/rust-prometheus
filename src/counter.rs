@@ -173,7 +173,7 @@ pub struct GenericLocalCounter<P: Atomic> {
 }
 
 pub trait CounterWithValueType {
-    type ValueType : Atomic;
+    type ValueType: Atomic;
 }
 
 impl<P: Atomic> CounterWithValueType for GenericLocalCounter<P> {
@@ -236,7 +236,7 @@ impl<P: Atomic> GenericLocalCounter<P> {
 }
 
 ///a delegator for static metrics to auto flush
-pub trait AFLocalCounterDelegator<T: 'static + MayFlush, V : CounterWithValueType> {
+pub trait AFLocalCounterDelegator<T: 'static + MayFlush, V: CounterWithValueType> {
     #[inline]
     ///get the root local metric for delegate
     fn get_root_metric(&self) -> &'static LocalKey<T>;

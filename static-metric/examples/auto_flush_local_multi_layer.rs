@@ -9,13 +9,13 @@ extern crate prometheus_static_metric;
 use std::cell::Cell;
 
 use coarsetime::Instant;
-use prometheus::*;
 #[allow(unused_imports)]
 use prometheus::local::*;
+use prometheus::*;
 use std::collections::HashMap;
-use std::thread::LocalKey;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::thread::LocalKey;
 
 #[allow(unused_imports)]
 pub struct Lhrs {
@@ -26,9 +26,7 @@ pub struct Lhrs {
 
 impl Lhrs {
     pub fn from(inner: &'static LocalKey<LhrsInner>) -> Lhrs {
-        let x = unsafe {
-            MaybeUninit::<LhrsInner>::uninit().assume_init()
-        };
+        let x = unsafe { MaybeUninit::<LhrsInner>::uninit().assume_init() };
         let branch_offset = &x as *const LhrsInner as usize;
         let foo = LhrsDelegator::new(
             &inner,
@@ -70,11 +68,8 @@ pub struct LhrsDelegator {
 }
 
 impl LhrsDelegator {
-    fn new(root: &'static LocalKey<LhrsInner>,
-           offset: usize) -> LhrsDelegator {
-        let x = unsafe {
-            MaybeUninit::<LhrsInner2>::uninit().assume_init()
-        };
+    fn new(root: &'static LocalKey<LhrsInner>, offset: usize) -> LhrsDelegator {
+        let x = unsafe { MaybeUninit::<LhrsInner2>::uninit().assume_init() };
         let branch_offset = &x as *const LhrsInner2 as usize;
         let post = LhrsDelegator2::new(
             root,
@@ -141,32 +136,23 @@ pub struct LhrsDelegator2 {
 }
 
 impl LhrsDelegator2 {
-    fn new(root: &'static LocalKey<LhrsInner>,
-           offset: usize,
-           offset2: usize) -> LhrsDelegator2 {
-        let x = unsafe {
-            MaybeUninit::<LhrsInner3>::uninit().assume_init()
-        };
+    fn new(root: &'static LocalKey<LhrsInner>, offset: usize, offset2: usize) -> LhrsDelegator2 {
+        let x = unsafe { MaybeUninit::<LhrsInner3>::uninit().assume_init() };
         let branch_offset = (&x as *const LhrsInner3) as usize;
-        let http1 =
-            LhrsDelegator3 {
-                root,
-                offset,
-                offset2,
-                offset3: &(x.http1) as *const LocalIntCounter as usize - branch_offset,
-            };
-        let http2 =
-            LhrsDelegator3 {
-                root,
-                offset,
-                offset2,
-                offset3: &(x.http2) as *const LocalIntCounter as usize - branch_offset,
-            };
+        let http1 = LhrsDelegator3 {
+            root,
+            offset,
+            offset2,
+            offset3: &(x.http1) as *const LocalIntCounter as usize - branch_offset,
+        };
+        let http2 = LhrsDelegator3 {
+            root,
+            offset,
+            offset2,
+            offset3: &(x.http2) as *const LocalIntCounter as usize - branch_offset,
+        };
         mem::forget(x);
-        LhrsDelegator2 {
-            http1,
-            http2,
-        }
+        LhrsDelegator2 { http1, http2 }
     }
 }
 
@@ -201,15 +187,15 @@ pub struct LhrsDelegator3 {
     offset3: usize,
 }
 
-impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter>
-for LhrsDelegator3 {
+impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
     fn get_root_metric(&self) -> &'static LocalKey<LhrsInner> {
         self.root
     }
 
     fn get_counter<'a>(&self, root_metric: &'a LhrsInner) -> &'a LocalIntCounter {
         unsafe {
-            let inner2 = (root_metric as *const LhrsInner as usize + self.offset) as *const LhrsInner2;
+            let inner2 =
+                (root_metric as *const LhrsInner as usize + self.offset) as *const LhrsInner2;
             let inner3 = (inner2 as usize + self.offset2) as *const LhrsInner3;
             let counter = (inner3 as usize + self.offset3) as *const LocalIntCounter;
             &*counter
@@ -218,11 +204,7 @@ for LhrsDelegator3 {
 }
 
 impl LhrsInner3 {
-    pub fn from(
-        label_0: &str,
-        label_1: &str,
-        m: &IntCounterVec,
-    ) -> LhrsInner3 {
+    pub fn from(label_0: &str, label_1: &str, m: &IntCounterVec) -> LhrsInner3 {
         LhrsInner3 {
             http1: m
                 .with(&{
@@ -251,7 +233,6 @@ impl LhrsInner3 {
     }
 }
 
-
 impl ::prometheus::local::MayFlush for LhrsInner {
     fn may_flush(&self) {
         MayFlush::try_flush(self, &self.last_flush, 1.0)
@@ -272,18 +253,27 @@ pub static TLS_HTTP_COUNTER_INNER: LhrsInner = LhrsInner::from(& HTTP_COUNTER_VE
 }
 
 lazy_static! {
-pub static ref TLS_HTTP_COUNTER: Lhrs =
-Lhrs::from( & TLS_HTTP_COUNTER_INNER);
+    pub static ref TLS_HTTP_COUNTER: Lhrs = Lhrs::from(&TLS_HTTP_COUNTER_INNER);
 }
 
 fn main() {
     TLS_HTTP_COUNTER.foo.post.http1.inc();
     TLS_HTTP_COUNTER.foo.post.http1.inc();
 
-    assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo", "post", "HTTP/1"]).get(), 0);
+    assert_eq!(
+        HTTP_COUNTER_VEC
+            .with_label_values(&["foo", "post", "HTTP/1"])
+            .get(),
+        0
+    );
 
     ::std::thread::sleep(::std::time::Duration::from_secs(2));
 
     TLS_HTTP_COUNTER.foo.post.http1.inc();
-    assert_eq!(HTTP_COUNTER_VEC.with_label_values(&["foo", "post", "HTTP/1"]).get(), 3);
+    assert_eq!(
+        HTTP_COUNTER_VEC
+            .with_label_values(&["foo", "post", "HTTP/1"])
+            .get(),
+        3
+    );
 }

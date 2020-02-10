@@ -9,14 +9,14 @@ extern crate prometheus_static_metric;
 use std::cell::Cell;
 
 use coarsetime::Instant;
-use prometheus::*;
 use prometheus::core::AtomicI64;
 #[allow(unused_imports)]
 use prometheus::local::*;
+use prometheus::*;
 use std::collections::HashMap;
-use std::thread::LocalKey;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::thread::LocalKey;
 
 #[allow(missing_copy_implementations)]
 pub struct LocalHttpRequestStatisticsInner {
@@ -74,18 +74,17 @@ impl LocalHttpRequestStatistics {
     pub fn from(
         inner: &'static LocalKey<LocalHttpRequestStatisticsInner>,
     ) -> LocalHttpRequestStatistics {
-        let x: LocalHttpRequestStatisticsInner = unsafe {
-            MaybeUninit::<LocalHttpRequestStatisticsInner>::uninit().assume_init()
-        };
+        let x: LocalHttpRequestStatisticsInner =
+            unsafe { MaybeUninit::<LocalHttpRequestStatisticsInner>::uninit().assume_init() };
         let foo = LocalHttpRequestStatisticsDelegator {
             root: &inner,
-            offset:
-            &(x.foo) as *const LocalIntCounter as usize - (&x as *const LocalHttpRequestStatisticsInner as usize),
+            offset: &(x.foo) as *const LocalIntCounter as usize
+                - (&x as *const LocalHttpRequestStatisticsInner as usize),
         };
         let bar = LocalHttpRequestStatisticsDelegator {
             root: &inner,
-            offset:
-            &(x.bar) as *const LocalIntCounter as usize - (&x as *const LocalHttpRequestStatisticsInner as usize),
+            offset: &(x.bar) as *const LocalIntCounter as usize
+                - (&x as *const LocalHttpRequestStatisticsInner as usize),
         };
         mem::forget(x);
         LocalHttpRequestStatistics { inner, foo, bar }
@@ -110,7 +109,7 @@ pub struct LocalHttpRequestStatisticsDelegator {
 }
 
 impl AFLocalCounterDelegator<LocalHttpRequestStatisticsInner, LocalIntCounter>
-for LocalHttpRequestStatisticsDelegator
+    for LocalHttpRequestStatisticsDelegator
 {
     fn get_root_metric(&self) -> &'static LocalKey<LocalHttpRequestStatisticsInner> {
         self.root
