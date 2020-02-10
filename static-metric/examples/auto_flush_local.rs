@@ -109,7 +109,7 @@ pub struct LocalHttpRequestStatisticsDelegator {
     offset: usize,
 }
 
-impl AFLocalCounterDelegator<LocalHttpRequestStatisticsInner, AtomicI64>
+impl AFLocalCounterDelegator<LocalHttpRequestStatisticsInner, LocalIntCounter>
 for LocalHttpRequestStatisticsDelegator
 {
     fn get_root_metric(&self) -> &'static LocalKey<LocalHttpRequestStatisticsInner> {

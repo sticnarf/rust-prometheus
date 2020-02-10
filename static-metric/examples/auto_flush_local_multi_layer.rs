@@ -10,7 +10,6 @@ use std::cell::Cell;
 
 use coarsetime::Instant;
 use prometheus::*;
-use prometheus::core::{AtomicI64, GenericLocalCounter};
 #[allow(unused_imports)]
 use prometheus::local::*;
 use std::collections::HashMap;
@@ -19,7 +18,6 @@ use std::mem;
 use std::mem::MaybeUninit;
 
 #[allow(unused_imports)]
-
 pub struct Lhrs {
     inner: &'static LocalKey<LhrsInner>,
     pub foo: LhrsDelegator,
@@ -155,14 +153,14 @@ impl LhrsDelegator2 {
                 root,
                 offset,
                 offset2,
-                offset3: &(x.http1) as *const LocalIntCounter as usize - branch_offset
+                offset3: &(x.http1) as *const LocalIntCounter as usize - branch_offset,
             };
         let http2 =
             LhrsDelegator3 {
                 root,
                 offset,
                 offset2,
-                offset3: &(x.http2) as *const LocalIntCounter as usize - branch_offset
+                offset3: &(x.http2) as *const LocalIntCounter as usize - branch_offset,
             };
         mem::forget(x);
         LhrsDelegator2 {
@@ -203,14 +201,13 @@ pub struct LhrsDelegator3 {
     offset3: usize,
 }
 
-//TODO: AtomicI64 should be derived by compiler
-impl AFLocalCounterDelegator<LhrsInner, AtomicI64>
+impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter>
 for LhrsDelegator3 {
     fn get_root_metric(&self) -> &'static LocalKey<LhrsInner> {
         self.root
     }
 
-    fn get_counter<'a>(&self, root_metric: &'a LhrsInner) -> &'a GenericLocalCounter<AtomicI64> {
+    fn get_counter<'a>(&self, root_metric: &'a LhrsInner) -> &'a LocalIntCounter {
         unsafe {
             let inner2 = (root_metric as *const LhrsInner as usize + self.offset) as *const LhrsInner2;
             let inner3 = (inner2 as usize + self.offset2) as *const LhrsInner3;
