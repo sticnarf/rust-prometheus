@@ -17,40 +17,14 @@ use std::mem;
 use std::mem::MaybeUninit;
 use std::thread::LocalKey;
 
-#[allow(unused_imports)]
-pub struct Lhrs {
-    inner: &'static LocalKey<LhrsInner>,
-    pub foo: LhrsDelegator,
-    pub bar: LhrsDelegator,
-}
-
-impl Lhrs {
-    pub fn from(inner: &'static LocalKey<LhrsInner>) -> Lhrs {
-        let x = unsafe { MaybeUninit::<LhrsInner>::uninit().assume_init() };
-        let branch_offset = &x as *const LhrsInner as usize;
-        let foo = LhrsDelegator::new(
-            &inner,
-            &(x.foo) as *const LhrsInner2 as usize - branch_offset,
-        );
-        let bar = LhrsDelegator::new(
-            &inner,
-            &(x.bar) as *const LhrsInner2 as usize - branch_offset,
-        );
-        mem::forget(x);
-        Lhrs { inner, foo, bar }
-    }
-
-    pub fn try_get(&self, value: &str) -> Option<&LhrsDelegator> {
-        match value {
-            "foo" => Some(&self.foo),
-            "bar" => Some(&self.bar),
-            _ => None,
-        }
-    }
-
-    pub fn flush(&self) {
-        self.inner.with(|m| m.flush())
-    }
+#[allow(dead_code)]
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum Methods {
+    post,
+    get,
+    put,
+    delete,
 }
 
 #[allow(missing_copy_implementations)]
@@ -58,6 +32,96 @@ pub struct LhrsInner {
     pub foo: LhrsInner2,
     pub bar: LhrsInner2,
     last_flush: Cell<Instant>,
+}
+
+
+impl LhrsInner {
+    pub fn from(m: &IntCounterVec) -> LhrsInner {
+        LhrsInner {
+            foo: LhrsInner2::from("foo", m),
+            bar: LhrsInner2::from("bar", m),
+            last_flush: Cell::new(Instant::now()),
+        }
+    }
+
+    pub fn flush(&self) {
+        self.foo.flush();
+        self.bar.flush();
+    }
+}
+
+impl ::prometheus::local::LocalMetric for LhrsInner {
+    fn flush(&self) {
+        LhrsInner::flush(self);
+    }
+}
+
+impl ::prometheus::local::MayFlush for LhrsInner {
+    fn may_flush(&self) {
+        MayFlush::try_flush(self, &self.last_flush, 1.0)
+    }
+}
+
+#[allow(missing_copy_implementations)]
+pub struct LhrsInner2 {
+    pub post: LhrsInner3,
+    pub get: LhrsInner3,
+    pub put: LhrsInner3,
+    pub delete: LhrsInner3,
+}
+
+impl LhrsInner2 {
+    pub fn from(label_0: &str, m: &IntCounterVec) -> LhrsInner2 {
+        LhrsInner2 {
+            post: LhrsInner3::from(label_0, "post", m),
+            get: LhrsInner3::from(label_0, "get", m),
+            put: LhrsInner3::from(label_0, "put", m),
+            delete: LhrsInner3::from(label_0, "delete", m),
+        }
+    }
+
+    pub fn flush(&self) {
+        self.post.flush();
+        self.get.flush();
+        self.put.flush();
+        self.delete.flush();
+    }
+}
+
+#[allow(missing_copy_implementations)]
+pub struct LhrsInner3 {
+    pub http1: LocalIntCounter,
+    pub http2: LocalIntCounter,
+}
+
+impl LhrsInner3 {
+    pub fn from(label_0: &str, label_1: &str, m: &IntCounterVec) -> LhrsInner3 {
+        LhrsInner3 {
+            http1: m
+                .with(&{
+                    let mut coll = HashMap::new();
+                    coll.insert("product", label_0);
+                    coll.insert("method", label_1);
+                    coll.insert("version", "HTTP/1");
+                    coll
+                })
+                .local(),
+            http2: m
+                .with(&{
+                    let mut coll = HashMap::new();
+                    coll.insert("product", label_0);
+                    coll.insert("method", label_1);
+                    coll.insert("version", "HTTP/2");
+                    coll
+                })
+                .local(),
+        }
+    }
+
+    pub fn flush(&self) {
+        self.http1.flush();
+        self.http2.flush();
+    }
 }
 
 pub struct LhrsDelegator {
@@ -99,35 +163,15 @@ impl LhrsDelegator {
             delete,
         }
     }
-}
 
-impl LhrsInner {
-    pub fn from(m: &IntCounterVec) -> LhrsInner {
-        LhrsInner {
-            foo: LhrsInner2::from("foo", m),
-            bar: LhrsInner2::from("bar", m),
-            last_flush: Cell::new(Instant::now()),
+    pub fn get(&self, value: Methods) -> &MyStaticCounterVec2 {
+        match value {
+            Methods::post => &self.post,
+            Methods::get => &self.get,
+            Methods::put => &self.put,
+            Methods::delete => &self.delete,
         }
     }
-
-    pub fn flush(&self) {
-        self.foo.flush();
-        self.bar.flush();
-    }
-}
-
-impl ::prometheus::local::LocalMetric for LhrsInner {
-    fn flush(&self) {
-        LhrsInner::flush(self);
-    }
-}
-
-#[allow(missing_copy_implementations)]
-pub struct LhrsInner2 {
-    pub post: LhrsInner3,
-    pub get: LhrsInner3,
-    pub put: LhrsInner3,
-    pub delete: LhrsInner3,
 }
 
 pub struct LhrsDelegator2 {
@@ -156,30 +200,6 @@ impl LhrsDelegator2 {
     }
 }
 
-impl LhrsInner2 {
-    pub fn from(label_0: &str, m: &IntCounterVec) -> LhrsInner2 {
-        LhrsInner2 {
-            post: LhrsInner3::from(label_0, "post", m),
-            get: LhrsInner3::from(label_0, "get", m),
-            put: LhrsInner3::from(label_0, "put", m),
-            delete: LhrsInner3::from(label_0, "delete", m),
-        }
-    }
-
-    pub fn flush(&self) {
-        self.post.flush();
-        self.get.flush();
-        self.put.flush();
-        self.delete.flush();
-    }
-}
-
-#[allow(missing_copy_implementations)]
-pub struct LhrsInner3 {
-    pub http1: LocalIntCounter,
-    pub http2: LocalIntCounter,
-}
-
 pub struct LhrsDelegator3 {
     root: &'static LocalKey<LhrsInner>,
     offset: usize,
@@ -203,39 +223,38 @@ impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
     }
 }
 
-impl LhrsInner3 {
-    pub fn from(label_0: &str, label_1: &str, m: &IntCounterVec) -> LhrsInner3 {
-        LhrsInner3 {
-            http1: m
-                .with(&{
-                    let mut coll = HashMap::new();
-                    coll.insert("product", label_0);
-                    coll.insert("method", label_1);
-                    coll.insert("version", "HTTP/1");
-                    coll
-                })
-                .local(),
-            http2: m
-                .with(&{
-                    let mut coll = HashMap::new();
-                    coll.insert("product", label_0);
-                    coll.insert("method", label_1);
-                    coll.insert("version", "HTTP/2");
-                    coll
-                })
-                .local(),
+pub struct Lhrs {
+    inner: &'static LocalKey<LhrsInner>,
+    pub foo: LhrsDelegator,
+    pub bar: LhrsDelegator,
+}
+
+impl Lhrs {
+    pub fn from(inner: &'static LocalKey<LhrsInner>) -> Lhrs {
+        let x = unsafe { MaybeUninit::<LhrsInner>::uninit().assume_init() };
+        let branch_offset = &x as *const LhrsInner as usize;
+        let foo = LhrsDelegator::new(
+            &inner,
+            &(x.foo) as *const LhrsInner2 as usize - branch_offset,
+        );
+        let bar = LhrsDelegator::new(
+            &inner,
+            &(x.bar) as *const LhrsInner2 as usize - branch_offset,
+        );
+        mem::forget(x);
+        Lhrs { inner, foo, bar }
+    }
+
+    pub fn try_get(&self, value: &str) -> Option<&LhrsDelegator> {
+        match value {
+            "foo" => Some(&self.foo),
+            "bar" => Some(&self.bar),
+            _ => None,
         }
     }
 
     pub fn flush(&self) {
-        self.http1.flush();
-        self.http2.flush();
-    }
-}
-
-impl ::prometheus::local::MayFlush for LhrsInner {
-    fn may_flush(&self) {
-        MayFlush::try_flush(self, &self.last_flush, 1.0)
+        self.inner.with(|m| m.flush())
     }
 }
 
