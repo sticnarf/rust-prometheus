@@ -84,8 +84,8 @@ impl AutoFlushTokensBuilder {
                 //                let code_trait_impl = builder_context.build_local_metric_impl();
                 quote! {
                                     #inner_struct
-                                    #delegator_struct
                                     #inner_impl
+                                    #delegator_struct
                 //                    #code_trait_impl
                                 }
             })
@@ -99,29 +99,30 @@ impl AutoFlushTokensBuilder {
 
         let visibility = &metric.visibility;
         let struct_name = &metric.struct_name;
-        let inner_struct_name = Ident::new(&format!("{}Inner", &metric.struct_name), Span::call_site());
+        let inner_struct_name =
+            Ident::new(&format!("{}Inner", &metric.struct_name), Span::call_site());
 
         quote! {
-                    #visibility use self::#scope_name::#inner_struct_name;
+            #visibility use self::#scope_name::#inner_struct_name;
 
-                    #[allow(dead_code)]
-                    mod #scope_name {
-                        use ::std::collections::HashMap;
-                        use ::prometheus::*;
-                        use ::prometheus::local::*;
-                        use ::std::cell::Cell;
-                        use ::coarsetime::Instant;
-                        use ::std::thread::LocalKey;
+            #[allow(dead_code)]
+            mod #scope_name {
+                use ::std::collections::HashMap;
+                use ::prometheus::*;
+                use ::prometheus::local::*;
+                use ::std::cell::Cell;
+                use ::coarsetime::Instant;
+                use ::std::thread::LocalKey;
 
 
-                        #[allow(unused_imports)]
-                        use super::*;
+                #[allow(unused_imports)]
+                use super::*;
 
-                        #(
-                            #label_struct
-                        )*
-                    }
-                }
+                #(
+                    #label_struct
+                )*
+            }
+        }
     }
 }
 
@@ -238,7 +239,10 @@ impl<'a> MetricBuilderContext<'a> {
     }
 
     fn build_impl_from_body(&self, prev_labels_ident: &[Ident]) -> Tokens {
-        let member_type = Ident::new(&format!("{}Inner", self.member_type.to_string()), Span::call_site());
+        let member_type = Ident::new(
+            &format!("{}Inner", self.member_type.to_string()),
+            Span::call_site(),
+        );
 
         let init_instant = if self.label_index == 0 {
             quote! {
@@ -302,17 +306,20 @@ impl<'a> MetricBuilderContext<'a> {
     }
 
     fn build_inner_impl_flush(&self) -> Tokens {
-        Tokens::new()
+        let value_def_list = self.label.get_value_def_list(self.enum_definitions);
+        let names = value_def_list.get_names();
+        quote! {
+            pub fn flush(&self) {
+                #(self.#names.flush();)*
+            }
+        }
     }
     fn build_delegator_struct(&self) -> Tokens {
         let struct_name = Ident::new(
             &format!("{}Delegator", &self.struct_name),
             Span::call_site(),
         );
-        let inner_root_name = Ident::new(
-            &format!("{}Inner", &self.struct_name),
-            Span::call_site(),
-        );
+        let inner_root_name = Ident::new(&format!("{}Inner", &self.struct_name), Span::call_site());
         let field_names = if self.is_last_label {
             (1..=self.metric.labels.len())
                 .map(|suffix| Ident::new(&format!("offset{}", suffix), Span::call_site()))
