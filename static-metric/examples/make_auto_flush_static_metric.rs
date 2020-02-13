@@ -6,10 +6,16 @@ Use metric enums to reuse possible values of a label.
 
 */
 
+extern crate coarsetime;
+extern crate lazy_static;
 extern crate prometheus;
 extern crate prometheus_static_metric;
 
-use prometheus::{CounterVec, IntCounterVec, Opts};
+use std::cell::Cell;
+
+use coarsetime::Instant;
+use prometheus::*;
+
 use prometheus_static_metric::make_auto_flush_static_metric;
 
 make_auto_flush_static_metric! {
@@ -33,5 +39,4 @@ make_auto_flush_static_metric! {
     }
 }
 
-fn main() {
-}
+fn main() {}

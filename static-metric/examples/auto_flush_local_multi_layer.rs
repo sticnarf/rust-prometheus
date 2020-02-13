@@ -55,7 +55,6 @@ pub struct LhrsDelegator {
     pub delete: LhrsDelegator2,
 }
 
-
 pub struct LhrsDelegator2 {
     pub http1: LhrsDelegator3,
     pub http2: LhrsDelegator3,
@@ -130,7 +129,6 @@ impl LhrsInner3 {
         self.http2.flush();
     }
 }
-
 
 impl ::prometheus::local::LocalMetric for LhrsInner {
     fn flush(&self) {
@@ -207,7 +205,6 @@ impl LhrsDelegator2 {
         LhrsDelegator2 { http1, http2 }
     }
 }
-
 
 impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
     fn get_root_metric(&self) -> &'static LocalKey<LhrsInner> {

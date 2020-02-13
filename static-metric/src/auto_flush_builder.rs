@@ -77,14 +77,16 @@ impl AutoFlushTokensBuilder {
             .enumerate()
             .map(|(i, _)| {
                 let builder_context = MetricBuilderContext::new(metric, enum_definitions, i);
-                let code_struct = builder_context.build_inner_struct();
+                let inner_struct = builder_context.build_inner_struct();
+                let delegator_struct = builder_context.build_delegator_struct();
                 //                let code_impl = builder_context.build_impl();
-//                let code_trait_impl = builder_context.build_local_metric_impl();
+                //                let code_trait_impl = builder_context.build_local_metric_impl();
                 quote! {
-                    #code_struct
-//                    #code_impl
-//                    #code_trait_impl
-                }
+                                    #inner_struct
+                                    #delegator_struct
+                //                    #code_impl
+                //                    #code_trait_impl
+                                }
             })
             .collect();
 
@@ -98,22 +100,22 @@ impl AutoFlushTokensBuilder {
         let struct_name = &metric.struct_name;
 
         quote! {
-//            #visibility use self::#scope_name::#struct_name;
+        //            #visibility use self::#scope_name::#struct_name;
 
-            #[allow(dead_code)]
-            mod #scope_name {
-                use ::std::collections::HashMap;
-                use ::prometheus::*;
-                use ::prometheus::local::*;
+                    #[allow(dead_code)]
+                    mod #scope_name {
+                        use ::std::collections::HashMap;
+                        use ::prometheus::*;
+                        use ::prometheus::local::*;
 
-                #[allow(unused_imports)]
-                use super::*;
+                        #[allow(unused_imports)]
+                        use super::*;
 
-                #(
-                    #label_struct
-                )*
-            }
-        }
+                        #(
+                            #label_struct
+                        )*
+                    }
+                }
     }
 }
 
@@ -159,13 +161,16 @@ impl<'a> MetricBuilderContext<'a> {
             .label
             .get_value_def_list(self.enum_definitions)
             .get_names();
-        let member_types: Vec<_> = field_names.iter().map(|_| {
-            if self.is_last_label {
-                self.member_type.clone()
-            } else {
-                Ident::new(&format!("{}Inner", &self.member_type), Span::call_site())
-            }
-        }).collect();
+        let member_types: Vec<_> = field_names
+            .iter()
+            .map(|_| {
+                if self.is_last_label {
+                    self.member_type.clone()
+                } else {
+                    Ident::new(&format!("{}Inner", &self.member_type), Span::call_site())
+                }
+            })
+            .collect();
 
         quote! {
             #[allow(missing_copy_implementations)]
@@ -178,14 +183,55 @@ impl<'a> MetricBuilderContext<'a> {
     }
 
     fn build_delegator_struct(&self) -> Tokens {
-        let struct_name = Ident::new(&format!("{}Delegator", &self.struct_name), Span::call_site());
+        let struct_name = Ident::new(
+            &format!("{}Delegator", &self.struct_name),
+            Span::call_site(),
+        );
         let field_names = if self.is_last_label {
-            for
+            (1..=self.metric.labels.len())
+                .map(|suffix| Ident::new(&format!("offset{}", suffix), Span::call_site()))
+                .collect::<Vec<Ident>>()
         } else {
+            self.metric.labels[self.label_index + 1]
+                .get_value_def_list(self.enum_definitions)
+                .get_names()
+                .iter()
+                .map(|x| Ident::new(&x.to_string(), Span::call_site()))
+                .collect()
+        };
 
-        }
+        let member_types = if self.is_last_label {
+            (1..=self.metric.labels.len())
+                .map(|suffix| {
+                    util::get_delegator_member_type(
+                        self.metric.struct_name.clone(),
+                        self.label_index,
+                        self.is_last_label,
+                    )
+                })
+                .collect::<Vec<Ident>>()
+        } else {
+            self.metric.labels[self.label_index + 1]
+                .get_value_def_list(self.enum_definitions)
+                .get_names()
+                .iter()
+                .map(|_| {
+                    util::get_delegator_member_type(
+                        self.metric.struct_name.clone(),
+                        self.label_index,
+                        self.is_last_label,
+                    )
+                })
+                .collect::<Vec<Ident>>()
+        };
+
         quote! {
-
+            #[allow(missing_copy_implementations)]
+            pub struct #struct_name {
+                #(
+                    pub #field_names: #member_types,
+                )*
+            }
         }
     }
 }

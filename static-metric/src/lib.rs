@@ -30,8 +30,8 @@ extern crate proc_macro2;
 extern crate quote;
 extern crate syn;
 
-mod builder;
 mod auto_flush_builder;
+mod builder;
 mod parser;
 mod register_macro;
 mod util;
