@@ -63,7 +63,7 @@ pub struct LhrsDelegator2 {
 
 pub struct LhrsDelegator3 {
     root: &'static LocalKey<LhrsInner>,
-    offset: usize,
+    offset1: usize,
     offset2: usize,
     offset3: usize,
 }
@@ -193,13 +193,13 @@ impl LhrsDelegator2 {
         let branch_offset = (&x as *const LhrsInner3) as usize;
         let http1 = LhrsDelegator3 {
             root,
-            offset,
+            offset1: offset,
             offset2,
             offset3: &(x.http1) as *const LocalIntCounter as usize - branch_offset,
         };
         let http2 = LhrsDelegator3 {
             root,
-            offset,
+            offset1: offset,
             offset2,
             offset3: &(x.http2) as *const LocalIntCounter as usize - branch_offset,
         };
@@ -217,7 +217,7 @@ impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
     fn get_counter<'a>(&self, root_metric: &'a LhrsInner) -> &'a LocalIntCounter {
         unsafe {
             let inner2 =
-                (root_metric as *const LhrsInner as usize + self.offset) as *const LhrsInner2;
+                (root_metric as *const LhrsInner as usize + self.offset1) as *const LhrsInner2;
             let inner3 = (inner2 as usize + self.offset2) as *const LhrsInner3;
             let counter = (inner3 as usize + self.offset3) as *const LocalIntCounter;
             &*counter

@@ -176,4 +176,16 @@ impl<'a> MetricBuilderContext<'a> {
             }
         }
     }
+
+    fn build_delegator_struct(&self) -> Tokens {
+        let struct_name = Ident::new(&format!("{}Delegator", &self.struct_name), Span::call_site());
+        let field_names = if self.is_last_label {
+            for
+        } else {
+
+        }
+        quote! {
+
+        }
+    }
 }
