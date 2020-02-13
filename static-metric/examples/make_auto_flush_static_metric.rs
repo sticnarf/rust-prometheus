@@ -20,7 +20,7 @@ make_auto_flush_static_metric! {
         delete,
     }
 
-    pub struct LocalHttpRequestStatistics: LocalIntCounter {
+    pub struct Lhrs: LocalIntCounter {
         "product" => {
             foo,
             bar,

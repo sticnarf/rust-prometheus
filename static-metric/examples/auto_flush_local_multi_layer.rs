@@ -34,6 +34,39 @@ pub struct LhrsInner {
     last_flush: Cell<Instant>,
 }
 
+#[allow(missing_copy_implementations)]
+pub struct LhrsInner2 {
+    pub post: LhrsInner3,
+    pub get: LhrsInner3,
+    pub put: LhrsInner3,
+    pub delete: LhrsInner3,
+}
+
+#[allow(missing_copy_implementations)]
+pub struct LhrsInner3 {
+    pub http1: LocalIntCounter,
+    pub http2: LocalIntCounter,
+}
+
+pub struct LhrsDelegator {
+    pub post: LhrsDelegator2,
+    pub get: LhrsDelegator2,
+    pub put: LhrsDelegator2,
+    pub delete: LhrsDelegator2,
+}
+
+
+pub struct LhrsDelegator2 {
+    pub http1: LhrsDelegator3,
+    pub http2: LhrsDelegator3,
+}
+
+pub struct LhrsDelegator3 {
+    root: &'static LocalKey<LhrsInner>,
+    offset: usize,
+    offset2: usize,
+    offset3: usize,
+}
 
 impl LhrsInner {
     pub fn from(m: &IntCounterVec) -> LhrsInner {
@@ -48,26 +81,6 @@ impl LhrsInner {
         self.foo.flush();
         self.bar.flush();
     }
-}
-
-impl ::prometheus::local::LocalMetric for LhrsInner {
-    fn flush(&self) {
-        LhrsInner::flush(self);
-    }
-}
-
-impl ::prometheus::local::MayFlush for LhrsInner {
-    fn may_flush(&self) {
-        MayFlush::try_flush(self, &self.last_flush, 1.0)
-    }
-}
-
-#[allow(missing_copy_implementations)]
-pub struct LhrsInner2 {
-    pub post: LhrsInner3,
-    pub get: LhrsInner3,
-    pub put: LhrsInner3,
-    pub delete: LhrsInner3,
 }
 
 impl LhrsInner2 {
@@ -86,12 +99,6 @@ impl LhrsInner2 {
         self.put.flush();
         self.delete.flush();
     }
-}
-
-#[allow(missing_copy_implementations)]
-pub struct LhrsInner3 {
-    pub http1: LocalIntCounter,
-    pub http2: LocalIntCounter,
 }
 
 impl LhrsInner3 {
@@ -124,11 +131,17 @@ impl LhrsInner3 {
     }
 }
 
-pub struct LhrsDelegator {
-    pub post: LhrsDelegator2,
-    pub get: LhrsDelegator2,
-    pub put: LhrsDelegator2,
-    pub delete: LhrsDelegator2,
+
+impl ::prometheus::local::LocalMetric for LhrsInner {
+    fn flush(&self) {
+        LhrsInner::flush(self);
+    }
+}
+
+impl ::prometheus::local::MayFlush for LhrsInner {
+    fn may_flush(&self) {
+        MayFlush::try_flush(self, &self.last_flush, 1.0)
+    }
 }
 
 impl LhrsDelegator {
@@ -164,7 +177,7 @@ impl LhrsDelegator {
         }
     }
 
-    pub fn get(&self, value: Methods) -> &MyStaticCounterVec2 {
+    pub fn get(&self, value: Methods) -> &LhrsDelegator2 {
         match value {
             Methods::post => &self.post,
             Methods::get => &self.get,
@@ -172,11 +185,6 @@ impl LhrsDelegator {
             Methods::delete => &self.delete,
         }
     }
-}
-
-pub struct LhrsDelegator2 {
-    pub http1: LhrsDelegator3,
-    pub http2: LhrsDelegator3,
 }
 
 impl LhrsDelegator2 {
@@ -200,12 +208,6 @@ impl LhrsDelegator2 {
     }
 }
 
-pub struct LhrsDelegator3 {
-    root: &'static LocalKey<LhrsInner>,
-    offset: usize,
-    offset2: usize,
-    offset3: usize,
-}
 
 impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
     fn get_root_metric(&self) -> &'static LocalKey<LhrsInner> {

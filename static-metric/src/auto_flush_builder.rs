@@ -44,7 +44,76 @@ impl AutoFlushTokensBuilder {
         metric: &MetricDef,
         enum_definitions: &HashMap<Ident, MetricEnumDef>,
     ) -> Tokens {
-        Tokens::new()
+        // Check `label_enum` references.
+        for label in &metric.labels {
+            let enum_ident = label.get_enum_ident();
+            if let Some(e) = enum_ident {
+                // If metric is using a `label_enum`, it must exist before the metric definition.
+                let enum_def = enum_definitions.get(e);
+                if enum_def.is_none() {
+                    panic!("Label enum `{}` is undefined.", e)
+                }
+
+                // If metric has `pub` visibility, then `label_enum` should also be `pub`.
+                // TODO: Support other visibility, like `pub(xx)`.
+                if let Visibility::Public(_) = metric.visibility {
+                    if let Visibility::Public(_) = enum_def.unwrap().visibility {
+                        // `pub` is ok.
+                    } else {
+                        // others are unexpected.
+                        panic!(
+                            "Label enum `{}` does not have enough visibility because it is \
+                             used in metric `{}` which has `pub` visibility.",
+                            e, metric.struct_name
+                        );
+                    }
+                }
+            }
+        }
+
+        let label_struct: Vec<_> = metric
+            .labels
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let builder_context = MetricBuilderContext::new(metric, enum_definitions, i);
+                let code_struct = builder_context.build_inner_struct();
+                //                let code_impl = builder_context.build_impl();
+//                let code_trait_impl = builder_context.build_local_metric_impl();
+                quote! {
+                    #code_struct
+//                    #code_impl
+//                    #code_trait_impl
+                }
+            })
+            .collect();
+
+        let scope_id = SCOPE_ID.fetch_add(1, Ordering::Relaxed);
+        let scope_name = Ident::new(
+            &format!("prometheus_static_scope_{}", scope_id),
+            Span::call_site(),
+        );
+
+        let visibility = &metric.visibility;
+        let struct_name = &metric.struct_name;
+
+        quote! {
+//            #visibility use self::#scope_name::#struct_name;
+
+            #[allow(dead_code)]
+            mod #scope_name {
+                use ::std::collections::HashMap;
+                use ::prometheus::*;
+                use ::prometheus::local::*;
+
+                #[allow(unused_imports)]
+                use super::*;
+
+                #(
+                    #label_struct
+                )*
+            }
+        }
     }
 }
 
@@ -80,6 +149,31 @@ impl<'a> MetricBuilderContext<'a> {
                 metric.metric_type.clone(),
                 is_last_label,
             ),
+        }
+    }
+
+    fn build_inner_struct(&self) -> Tokens {
+        let struct_name = Ident::new(&format!("{}Inner", &self.struct_name), Span::call_site());
+
+        let field_names = self
+            .label
+            .get_value_def_list(self.enum_definitions)
+            .get_names();
+        let member_types: Vec<_> = field_names.iter().map(|_| {
+            if self.is_last_label {
+                self.member_type.clone()
+            } else {
+                Ident::new(&format!("{}Inner", &self.member_type), Span::call_site())
+            }
+        }).collect();
+
+        quote! {
+            #[allow(missing_copy_implementations)]
+            pub struct #struct_name {
+                #(
+                    pub #field_names: #member_types,
+                )*
+            }
         }
     }
 }
