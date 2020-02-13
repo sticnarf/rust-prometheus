@@ -79,12 +79,14 @@ impl AutoFlushTokensBuilder {
                 let builder_context = MetricBuilderContext::new(metric, enum_definitions, i);
                 let inner_struct = builder_context.build_inner_struct();
                 let inner_impl = builder_context.build_inner_impl();
+                let inner_trait_impl = builder_context.build_inner_trait_impl();
                 let delegator_struct = builder_context.build_delegator_struct();
                 //                let code_impl = builder_context.build_impl();
                 //                let code_trait_impl = builder_context.build_local_metric_impl();
                 quote! {
                                     #inner_struct
                                     #inner_impl
+                                    #inner_trait_impl
                                     #delegator_struct
                 //                    #code_trait_impl
                                 }
@@ -210,6 +212,27 @@ impl<'a> MetricBuilderContext<'a> {
                 #impl_from
                 #impl_flush
             }
+        }
+    }
+
+    fn build_inner_trait_impl(&self) -> Tokens {
+        let struct_name = self.inner_struct_name();
+        if self.label_index == 0 {
+            quote! {
+                impl ::prometheus::local::LocalMetric for #struct_name {
+                    fn flush(&self) {
+                        #struct_name::flush(self);
+                    }
+                }
+
+                impl ::prometheus::local::MayFlush for #struct_name {
+                    fn may_flush(&self) {
+                        MayFlush::try_flush(self, &self.last_flush, 1.0)
+                    }
+                }
+            }
+        } else {
+            Tokens::new()
         }
     }
 
