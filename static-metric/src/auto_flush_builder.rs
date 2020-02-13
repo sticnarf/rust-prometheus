@@ -78,13 +78,14 @@ impl AutoFlushTokensBuilder {
             .map(|(i, _)| {
                 let builder_context = MetricBuilderContext::new(metric, enum_definitions, i);
                 let inner_struct = builder_context.build_inner_struct();
+                let inner_impl = builder_context.build_inner_impl();
                 let delegator_struct = builder_context.build_delegator_struct();
                 //                let code_impl = builder_context.build_impl();
                 //                let code_trait_impl = builder_context.build_local_metric_impl();
                 quote! {
                                     #inner_struct
                                     #delegator_struct
-                //                    #code_impl
+                                    #inner_impl
                 //                    #code_trait_impl
                                 }
             })
@@ -159,8 +160,12 @@ impl<'a> MetricBuilderContext<'a> {
         }
     }
 
+    fn inner_struct_name(&self) -> Ident {
+        Ident::new(&format!("{}Inner", &self.struct_name), Span::call_site())
+    }
+
     fn build_inner_struct(&self) -> Tokens {
-        let struct_name = Ident::new(&format!("{}Inner", &self.struct_name), Span::call_site());
+        let struct_name = self.inner_struct_name();
 
         let field_names = self
             .label
@@ -194,7 +199,111 @@ impl<'a> MetricBuilderContext<'a> {
             }
         }
     }
+    fn build_inner_impl(&self) -> Tokens {
+        let struct_name = self.inner_struct_name();
+        let impl_from = self.build_inner_impl_from();
+        let impl_flush = self.build_inner_impl_flush();
 
+        quote! {
+            impl #struct_name {
+                #impl_from
+                #impl_flush
+            }
+        }
+    }
+
+    fn build_inner_impl_from(&self) -> Tokens {
+        let struct_name = self.inner_struct_name();
+        let metric_vec_type = util::to_non_local_metric_type(util::get_metric_vec_type(
+            self.metric.metric_type.clone(),
+        ));
+
+        let prev_labels_ident: Vec<_> = (0..self.label_index)
+            .map(|i| Ident::new(&format!("label_{}", i), Span::call_site()))
+            .collect();
+        let body = self.build_impl_from_body(&prev_labels_ident);
+
+        quote! {
+            pub fn from(
+                #(
+                    #prev_labels_ident: &str,
+                )*
+                m: &#metric_vec_type
+            ) -> #struct_name {
+                #struct_name {
+                    #body
+                }
+            }
+        }
+    }
+
+    fn build_impl_from_body(&self, prev_labels_ident: &[Ident]) -> Tokens {
+        let member_type = Ident::new(&format!("{}Inner", self.member_type.to_string()), Span::call_site());
+
+        let init_instant = if self.label_index == 0 {
+            quote! {
+            last_flush: Cell::new(Instant::now()),
+            }
+        } else {
+            Tokens::new()
+        };
+
+        let bodies: Vec<_> = self
+            .label
+            .get_value_def_list(self.enum_definitions)
+            .get()
+            .iter()
+            .map(|value| {
+                let name = &value.name;
+                let value = &value.value;
+                if self.is_last_label {
+                    let current_label = &self.label.label_key;
+                    let prev_labels_str: Vec<_> = prev_labels_ident
+                        .iter()
+                        .enumerate()
+                        .map(|(i, _)| &self.metric.labels[i].label_key)
+                        .collect();
+                    let local_suffix_call =
+                        if util::is_local_metric(self.metric.metric_type.clone()) {
+                            quote! { .local() }
+                        } else {
+                            Tokens::new()
+                        };
+                    quote! {
+                        #name: m.with(&{
+                            let mut coll = HashMap::new();
+                            #(
+                                coll.insert(#prev_labels_str, #prev_labels_ident);
+                            )*
+                            coll.insert(#current_label, #value);
+                            coll
+                        })#local_suffix_call,
+                    }
+                } else {
+                    let prev_labels_ident = prev_labels_ident;
+                    quote! {
+                        #name: #member_type::from(
+                            #(
+                                #prev_labels_ident,
+                            )*
+                            #value,
+                            m,
+                        ),
+                    }
+                }
+            })
+            .collect();
+        quote! {
+            #(
+                #bodies
+            )*
+            #init_instant
+        }
+    }
+
+    fn build_inner_impl_flush(&self) -> Tokens {
+        Tokens::new()
+    }
     fn build_delegator_struct(&self) -> Tokens {
         let struct_name = Ident::new(
             &format!("{}Delegator", &self.struct_name),
