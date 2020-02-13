@@ -98,15 +98,20 @@ impl AutoFlushTokensBuilder {
 
         let visibility = &metric.visibility;
         let struct_name = &metric.struct_name;
+        let inner_struct_name = Ident::new(&format!("{}Inner", &metric.struct_name), Span::call_site());
 
         quote! {
-        //            #visibility use self::#scope_name::#struct_name;
+                    #visibility use self::#scope_name::#inner_struct_name;
 
                     #[allow(dead_code)]
                     mod #scope_name {
                         use ::std::collections::HashMap;
                         use ::prometheus::*;
                         use ::prometheus::local::*;
+                        use ::std::cell::Cell;
+                        use ::coarsetime::Instant;
+                        use ::std::thread::LocalKey;
+
 
                         #[allow(unused_imports)]
                         use super::*;
@@ -171,6 +176,13 @@ impl<'a> MetricBuilderContext<'a> {
                 }
             })
             .collect();
+        let last_flush = if self.label_index == 0 {
+            quote! {
+                last_flush: Cell<Instant>,
+            }
+        } else {
+            Tokens::new()
+        };
 
         quote! {
             #[allow(missing_copy_implementations)]
@@ -178,6 +190,7 @@ impl<'a> MetricBuilderContext<'a> {
                 #(
                     pub #field_names: #member_types,
                 )*
+                #last_flush
             }
         }
     }
@@ -185,6 +198,10 @@ impl<'a> MetricBuilderContext<'a> {
     fn build_delegator_struct(&self) -> Tokens {
         let struct_name = Ident::new(
             &format!("{}Delegator", &self.struct_name),
+            Span::call_site(),
+        );
+        let inner_root_name = Ident::new(
+            &format!("{}Inner", &self.struct_name),
             Span::call_site(),
         );
         let field_names = if self.is_last_label {
@@ -224,10 +241,18 @@ impl<'a> MetricBuilderContext<'a> {
                 })
                 .collect::<Vec<Ident>>()
         };
+        let root = if self.is_last_label {
+            quote! {
+                root: &'static LocalKey<#inner_root_name>,
+            }
+        } else {
+            Tokens::new()
+        };
 
         quote! {
             #[allow(missing_copy_implementations)]
             pub struct #struct_name {
+                #root
                 #(
                     pub #field_names: #member_types,
                 )*

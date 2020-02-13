@@ -11,9 +11,6 @@ extern crate lazy_static;
 extern crate prometheus;
 extern crate prometheus_static_metric;
 
-use std::cell::Cell;
-
-use coarsetime::Instant;
 use prometheus::*;
 
 use prometheus_static_metric::make_auto_flush_static_metric;
