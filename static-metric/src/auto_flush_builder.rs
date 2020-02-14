@@ -313,23 +313,35 @@ impl<'a> MetricBuilderContext<'a> {
         let delegator_member = self.delegator_member_type.clone();
         let member_type = self.inner_member_type.clone();
         let next_member_type = self.inner_next_member_type.clone();
-        if self.is_last_label {
-            Tokens::new()
-        } else {
-            let delegator_field_names = &self.delegator_field_names();
-            let known_offsets =
-                (1..=(self.label_index + 1))
-                    .map(|m| {
-                        let res = Ident::new(&format!("offset{}", m), Span::call_site());
-                        res
-                    })
-                    .collect::<Vec<Ident>>();
-            let known_offsets_tokens =
-                quote! {
+        let known_offsets =
+            (1..=(self.label_index + 1))
+                .map(|m| {
+                    let res = Ident::new(&format!("offset{}", m), Span::call_site());
+                    res
+                })
+                .collect::<Vec<Ident>>();
+        let known_offsets_tokens =
+            quote! {
                   #(
                   #known_offsets,
                   )*
                 };
+        if self.is_last_label {
+            quote! {
+                pub fn new(
+                    root: &'static LocalKey<#inner_name>,
+                    #(
+                      #known_offsets : usize,
+                    )*
+                ) -> #delegator_name {
+                  #delegator_name {
+                        root,
+                        #known_offsets_tokens
+                    }
+                }
+            }
+        } else {
+            let delegator_field_names = &self.delegator_field_names();
 
             quote! {
                 pub fn new(
