@@ -237,11 +237,9 @@ impl<P: Atomic> GenericLocalCounter<P> {
 
 ///a delegator for static metrics to auto flush
 pub trait AFLocalCounterDelegator<T: 'static + MayFlush, V: CounterWithValueType> {
-    #[inline]
     ///get the root local metric for delegate
     fn get_root_metric(&self) -> &'static LocalKey<T>;
 
-    #[inline]
     ///get the final counter for delegate
     fn get_counter<'a>(&self, root_metric: &'a T) -> &'a GenericLocalCounter<V::ValueType>;
 

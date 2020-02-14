@@ -102,7 +102,6 @@ impl AutoFlushTokensBuilder {
         );
 
         let visibility = &metric.visibility;
-        let struct_name = &metric.struct_name;
         let inner_struct_name =
             Ident::new(&format!("{}Inner", &metric.struct_name), Span::call_site());
 
@@ -251,12 +250,12 @@ impl<'a> MetricBuilderContext<'a> {
     fn build_delegator_impl(&self) -> Tokens {
         let struct_name = self.delegator_struct_name();
         let impl_new = self.build_delegator_impl_new();
-        //        let impl_get = self.build_delegator_impl_get();
+        let impl_get = self.build_delegator_impl_get();
 
         quote! {
                     impl #struct_name {
                         #impl_new
-        //                #impl_get
+                        #impl_get
                     }
                 }
     }
@@ -367,6 +366,34 @@ impl<'a> MetricBuilderContext<'a> {
                     }
                 }
             }
+        }
+    }
+
+    /// `fn get()` is only available when label is defined by `label_enum`.
+    fn build_delegator_impl_get(&self) -> Tokens {
+        let enum_ident = self.label.get_enum_ident();
+        if let Some(e) = enum_ident {
+            let member_type = &self.delegator_member_type;
+            let match_patterns = self
+                .enum_definitions
+                .get(e)
+                .unwrap()
+                .build_fields_with_path();
+            let fields = self
+                .label
+                .get_value_def_list(self.enum_definitions)
+                .get_names();
+            quote! {
+                pub fn get(&self, enum_value: #e) -> &#member_type {
+                    match enum_value {
+                        #(
+                            #match_patterns => &self.#fields,
+                        )*
+                    }
+                }
+            }
+        } else {
+            Tokens::new()
         }
     }
 
