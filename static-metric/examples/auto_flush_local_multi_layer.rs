@@ -186,23 +186,34 @@ impl LhrsDelegator {
 }
 
 impl LhrsDelegator2 {
-    fn new(root: &'static LocalKey<LhrsInner>, offset: usize, offset2: usize) -> LhrsDelegator2 {
+    fn new(root: &'static LocalKey<LhrsInner>, offset1: usize, offset2: usize) -> LhrsDelegator2 {
         let x = unsafe { MaybeUninit::<LhrsInner3>::uninit().assume_init() };
         let branch_offset = (&x as *const LhrsInner3) as usize;
-        let http1 = LhrsDelegator3 {
+        let http1 = LhrsDelegator3::new(
             root,
-            offset1: offset,
+            offset1,
             offset2,
-            offset3: &(x.http1) as *const LocalIntCounter as usize - branch_offset,
-        };
-        let http2 = LhrsDelegator3 {
+            &(x.http1) as *const LocalIntCounter as usize - branch_offset,
+        );
+        let http2 = LhrsDelegator3::new(
             root,
-            offset1: offset,
+            offset1,
             offset2,
-            offset3: &(x.http2) as *const LocalIntCounter as usize - branch_offset,
-        };
+            &(x.http2) as *const LocalIntCounter as usize - branch_offset,
+        );
         mem::forget(x);
         LhrsDelegator2 { http1, http2 }
+    }
+}
+
+impl LhrsDelegator3 {
+    fn new(root: &'static LocalKey<LhrsInner>, offset1: usize, offset2: usize, offset3: usize) -> LhrsDelegator3 {
+        LhrsDelegator3 {
+            root,
+            offset1,
+            offset2,
+            offset3,
+        }
     }
 }
 

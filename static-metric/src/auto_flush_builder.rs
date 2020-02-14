@@ -142,6 +142,7 @@ struct MetricBuilderContext<'a> {
     root_struct_name: Ident,
     struct_name: Ident,
     member_type: Ident,
+    delegator_member_type: Ident,
     next_member_type: Ident,
     inner_member_type: Ident,
     inner_next_member_type: Ident,
@@ -169,6 +170,11 @@ impl<'a> MetricBuilderContext<'a> {
                 metric.struct_name.clone(),
                 label_index,
                 metric.metric_type.clone(),
+                is_last_label,
+            ),
+            delegator_member_type: util::get_delegator_member_type(
+                metric.struct_name.clone(),
+                label_index,
                 is_last_label,
             ),
             next_member_type: util::get_member_type(
@@ -422,11 +428,7 @@ impl<'a> MetricBuilderContext<'a> {
         let member_types = if self.is_last_label {
             (1..=self.metric.labels.len())
                 .map(|suffix| {
-                    util::get_delegator_member_type(
-                        self.metric.struct_name.clone(),
-                        self.label_index,
-                        self.is_last_label,
-                    )
+                    self.delegator_member_type.clone()
                 })
                 .collect::<Vec<Ident>>()
         } else {
@@ -435,11 +437,7 @@ impl<'a> MetricBuilderContext<'a> {
                 .get_names()
                 .iter()
                 .map(|_| {
-                    util::get_delegator_member_type(
-                        self.metric.struct_name.clone(),
-                        self.label_index,
-                        self.is_last_label,
-                    )
+                    self.delegator_member_type.clone()
                 })
                 .collect::<Vec<Ident>>()
         };
