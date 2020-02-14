@@ -81,6 +81,7 @@ impl AutoFlushTokensBuilder {
                 let inner_impl = builder_context.build_inner_impl();
                 let inner_trait_impl = builder_context.build_inner_trait_impl();
                 let delegator_struct = builder_context.build_delegator_struct();
+                let delegator_impl = builder_context.build_delegator_impl();
                 //                let code_impl = builder_context.build_impl();
                 //                let code_trait_impl = builder_context.build_local_metric_impl();
                 quote! {
@@ -88,6 +89,7 @@ impl AutoFlushTokensBuilder {
                                     #inner_impl
                                     #inner_trait_impl
                                     #delegator_struct
+                                    #delegator_impl
                 //                    #code_trait_impl
                                 }
             })
@@ -115,6 +117,8 @@ impl AutoFlushTokensBuilder {
                 use ::std::cell::Cell;
                 use ::coarsetime::Instant;
                 use ::std::thread::LocalKey;
+                use std::mem;
+                use std::mem::MaybeUninit;
 
 
                 #[allow(unused_imports)]
@@ -134,9 +138,13 @@ struct MetricBuilderContext<'a> {
     label: &'a MetricLabelDef,
     label_index: usize,
     is_last_label: bool,
-
+    is_secondary_last_label: bool,
+    root_struct_name: Ident,
     struct_name: Ident,
     member_type: Ident,
+    next_member_type: Ident,
+    inner_member_type: Ident,
+    inner_next_member_type: Ident,
 }
 
 impl<'a> MetricBuilderContext<'a> {
@@ -146,13 +154,16 @@ impl<'a> MetricBuilderContext<'a> {
         label_index: usize,
     ) -> MetricBuilderContext<'a> {
         let is_last_label = label_index == metric.labels.len() - 1;
+        let is_secondary_last_label = label_index == metric.labels.len() - 2;
+
         MetricBuilderContext {
             metric,
             enum_definitions,
             label: &metric.labels[label_index],
             label_index,
             is_last_label,
-
+            is_secondary_last_label,
+            root_struct_name: util::get_label_struct_name(metric.struct_name.clone(), 0),
             struct_name: util::get_label_struct_name(metric.struct_name.clone(), label_index),
             member_type: util::get_member_type(
                 metric.struct_name.clone(),
@@ -160,11 +171,36 @@ impl<'a> MetricBuilderContext<'a> {
                 metric.metric_type.clone(),
                 is_last_label,
             ),
+            next_member_type: util::get_member_type(
+                metric.struct_name.clone(),
+                label_index,
+                metric.metric_type.clone(),
+                is_secondary_last_label,
+            ),
+            inner_member_type: util::get_inner_member_type(
+                metric.struct_name.clone(),
+                label_index,
+                metric.metric_type.clone(),
+                is_last_label,
+            ),
+            inner_next_member_type: util::get_inner_member_type(
+                metric.struct_name.clone(),
+                label_index,
+                metric.metric_type.clone(),
+                is_secondary_last_label,
+            ),
         }
     }
 
     fn inner_struct_name(&self) -> Ident {
         Ident::new(&format!("{}Inner", &self.struct_name), Span::call_site())
+    }
+
+    fn delegator_struct_name(&self) -> Ident {
+        Ident::new(
+            &format!("{}Delegator", &self.struct_name),
+            Span::call_site(),
+        )
     }
 
     fn build_inner_struct(&self) -> Tokens {
@@ -174,16 +210,7 @@ impl<'a> MetricBuilderContext<'a> {
             .label
             .get_value_def_list(self.enum_definitions)
             .get_names();
-        let member_types: Vec<_> = field_names
-            .iter()
-            .map(|_| {
-                if self.is_last_label {
-                    self.member_type.clone()
-                } else {
-                    Ident::new(&format!("{}Inner", &self.member_type), Span::call_site())
-                }
-            })
-            .collect();
+        let member_types: Vec<_> = field_names.iter().map(|_| &self.inner_member_type).collect();
         let last_flush = if self.label_index == 0 {
             quote! {
                 last_flush: Cell<Instant>,
@@ -213,6 +240,19 @@ impl<'a> MetricBuilderContext<'a> {
                 #impl_flush
             }
         }
+    }
+
+    fn build_delegator_impl(&self) -> Tokens {
+        let struct_name = self.delegator_struct_name();
+        let impl_new = self.build_delegator_impl_new();
+        //        let impl_get = self.build_delegator_impl_get();
+
+        quote! {
+                    impl #struct_name {
+                        #impl_new
+        //                #impl_get
+                    }
+                }
     }
 
     fn build_inner_trait_impl(&self) -> Tokens {
@@ -245,7 +285,7 @@ impl<'a> MetricBuilderContext<'a> {
         let prev_labels_ident: Vec<_> = (0..self.label_index)
             .map(|i| Ident::new(&format!("label_{}", i), Span::call_site()))
             .collect();
-        let body = self.build_impl_from_body(&prev_labels_ident);
+        let body = self.build_inner_impl_from_body(&prev_labels_ident);
 
         quote! {
             pub fn from(
@@ -261,11 +301,34 @@ impl<'a> MetricBuilderContext<'a> {
         }
     }
 
-    fn build_impl_from_body(&self, prev_labels_ident: &[Ident]) -> Tokens {
-        let member_type = Ident::new(
-            &format!("{}Inner", self.member_type.to_string()),
-            Span::call_site(),
-        );
+    fn build_delegator_impl_new(&self) -> Tokens {
+        let inner_name = self.inner_struct_name();
+        let delegator_name = self.delegator_struct_name();
+        let member_type = &self.inner_member_type;
+        if self.is_last_label {
+            Tokens::new()
+        } else if self.is_secondary_last_label {
+            quote! {
+                pub fn new(
+                    root: &'static LocalKey<#inner_name>,
+                ) -> #delegator_name {
+                    let x = unsafe { MaybeUninit::<#member_type>::uninit().assume_init() };
+                    unimplemented!()
+                }
+            }
+        } else {
+            quote! {
+                pub fn new(
+                    root: &'static LocalKey<#inner_name>,
+                ) -> #delegator_name {
+                    unimplemented!()
+                }
+            }
+        }
+    }
+
+    fn build_inner_impl_from_body(&self, prev_labels_ident: &[Ident]) -> Tokens {
+        let member_type = &self.inner_member_type;
 
         let init_instant = if self.label_index == 0 {
             quote! {
@@ -338,11 +401,11 @@ impl<'a> MetricBuilderContext<'a> {
         }
     }
     fn build_delegator_struct(&self) -> Tokens {
-        let struct_name = Ident::new(
-            &format!("{}Delegator", &self.struct_name),
+        let struct_name = self.delegator_struct_name();
+        let inner_root_name = Ident::new(
+            &format!("{}Inner", &self.root_struct_name),
             Span::call_site(),
         );
-        let inner_root_name = Ident::new(&format!("{}Inner", &self.struct_name), Span::call_site());
         let field_names = if self.is_last_label {
             (1..=self.metric.labels.len())
                 .map(|suffix| Ident::new(&format!("offset{}", suffix), Span::call_site()))
