@@ -310,24 +310,27 @@ impl<'a> MetricBuilderContext<'a> {
     fn build_delegator_impl_new(&self) -> Tokens {
         let inner_name = self.inner_struct_name();
         let delegator_name = self.delegator_struct_name();
-        let member_type = &self.inner_member_type;
+        let delegator_member = self.delegator_member_type.clone();
+        let member_type = self.inner_member_type.clone();
         if self.is_last_label {
             Tokens::new()
-        } else if self.is_secondary_last_label {
+        } else {
+            let delegator_field_names = &self.delegator_field_names();
             quote! {
                 pub fn new(
                     root: &'static LocalKey<#inner_name>,
                 ) -> #delegator_name {
                     let x = unsafe { MaybeUninit::<#member_type>::uninit().assume_init() };
-                    unimplemented!()
-                }
-            }
-        } else {
-            quote! {
-                pub fn new(
-                    root: &'static LocalKey<#inner_name>,
-                ) -> #delegator_name {
-                    unimplemented!()
+                    let branch_offset = (&x as *const #member_type) as usize;
+                    #(
+                      let #delegator_field_names = unimplemented!();
+                    )*
+                    mem::forget(x);
+                    #delegator_name {
+                        #(
+                         #delegator_field_names,
+                        )*
+                    }
                 }
             }
         }
@@ -406,6 +409,16 @@ impl<'a> MetricBuilderContext<'a> {
             }
         }
     }
+
+    fn delegator_field_names(&self) -> Vec<Ident> {
+        self.metric.labels[self.label_index + 1]
+            .get_value_def_list(self.enum_definitions)
+            .get_names()
+            .iter()
+            .map(|x| Ident::new(&x.to_string(), Span::call_site()))
+            .collect()
+    }
+
     fn build_delegator_struct(&self) -> Tokens {
         let struct_name = self.delegator_struct_name();
         let inner_root_name = Ident::new(
@@ -417,12 +430,7 @@ impl<'a> MetricBuilderContext<'a> {
                 .map(|suffix| Ident::new(&format!("offset{}", suffix), Span::call_site()))
                 .collect::<Vec<Ident>>()
         } else {
-            self.metric.labels[self.label_index + 1]
-                .get_value_def_list(self.enum_definitions)
-                .get_names()
-                .iter()
-                .map(|x| Ident::new(&x.to_string(), Span::call_site()))
-                .collect()
+            self.delegator_field_names()
         };
 
         let member_types = if self.is_last_label {
