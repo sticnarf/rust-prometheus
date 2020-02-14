@@ -316,9 +316,35 @@ impl<'a> MetricBuilderContext<'a> {
             Tokens::new()
         } else {
             let delegator_field_names = &self.delegator_field_names();
+            let known_offsets =
+                (1..=(self.label_index + 1))
+                    .map(|m| {
+                        let res = Ident::new(&format!("offset{}", m), Span::call_site());
+                        res
+                    })
+                    .collect::<Vec<Ident>>();
+//            let new_delegator_member =
+//                delegator_field_names.iter().map(|field_name| {
+//                   quote! {
+//
+//                   }
+//                }).collect::<Vec<Tokens>>();
+
+//                    #(
+//                      let #delegator_field_names = #delegator_member::new(
+//                        root,
+//                        #(
+//                          #known_offsets,
+//                        )*
+//                        &(x.#delegator_field_names) as *const #member_type as usize - branch_offset,
+//                      );
+//                    )*
             quote! {
                 pub fn new(
                     root: &'static LocalKey<#inner_name>,
+                    #(
+                      #known_offsets : usize,
+                    )*
                 ) -> #delegator_name {
                     let x = unsafe { MaybeUninit::<#member_type>::uninit().assume_init() };
                     let branch_offset = (&x as *const #member_type) as usize;
