@@ -191,7 +191,7 @@ impl<'a> MetricBuilderContext<'a> {
             ),
             inner_next_member_type: util::get_inner_member_type(
                 metric.struct_name.clone(),
-                label_index,
+                label_index + 1,
                 metric.metric_type.clone(),
                 is_secondary_last_label,
             ),
@@ -312,6 +312,7 @@ impl<'a> MetricBuilderContext<'a> {
         let delegator_name = self.delegator_struct_name();
         let delegator_member = self.delegator_member_type.clone();
         let member_type = self.inner_member_type.clone();
+        let next_member_type = self.inner_next_member_type.clone();
         if self.is_last_label {
             Tokens::new()
         } else {
@@ -323,22 +324,13 @@ impl<'a> MetricBuilderContext<'a> {
                         res
                     })
                     .collect::<Vec<Ident>>();
-//            let new_delegator_member =
-//                delegator_field_names.iter().map(|field_name| {
-//                   quote! {
-//
-//                   }
-//                }).collect::<Vec<Tokens>>();
+            let known_offsets_tokens =
+                quote! {
+                  #(
+                  #known_offsets,
+                  )*
+                };
 
-//                    #(
-//                      let #delegator_field_names = #delegator_member::new(
-//                        root,
-//                        #(
-//                          #known_offsets,
-//                        )*
-//                        &(x.#delegator_field_names) as *const #member_type as usize - branch_offset,
-//                      );
-//                    )*
             quote! {
                 pub fn new(
                     root: &'static LocalKey<#inner_name>,
@@ -349,7 +341,11 @@ impl<'a> MetricBuilderContext<'a> {
                     let x = unsafe { MaybeUninit::<#member_type>::uninit().assume_init() };
                     let branch_offset = (&x as *const #member_type) as usize;
                     #(
-                      let #delegator_field_names = unimplemented!();
+                      let #delegator_field_names = #delegator_member::new(
+                      root,
+                      #known_offsets_tokens
+                      &(x.#delegator_field_names) as *const #next_member_type as usize - branch_offset,
+                      );
                     )*
                     mem::forget(x);
                     #delegator_name {
