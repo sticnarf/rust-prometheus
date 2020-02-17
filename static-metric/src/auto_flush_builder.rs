@@ -237,6 +237,7 @@ struct MetricBuilderContext<'a> {
     metric: &'a MetricDef,
     enum_definitions: &'a HashMap<Ident, MetricEnumDef>,
     label: &'a MetricLabelDef,
+    next_label: Option<&'a MetricLabelDef>,
     label_index: usize,
     is_last_label: bool,
     is_secondary_last_label: bool,
@@ -262,6 +263,7 @@ impl<'a> MetricBuilderContext<'a> {
             metric,
             enum_definitions,
             label: &metric.labels[label_index],
+            next_label: metric.labels.get(label_index + 1),
             label_index,
             is_last_label,
             is_secondary_last_label,
@@ -457,7 +459,10 @@ impl<'a> MetricBuilderContext<'a> {
     }
 
     fn build_delegator_impl_new(&self) -> Tokens {
-        let inner_name = self.inner_struct_name();
+        let inner_name = Ident::new(
+            &format!("{}Inner", self.metric.struct_name),
+            Span::call_site(),
+        );
         let delegator_name = self.delegator_struct_name();
         let delegator_member = self.delegator_member_type.clone();
         let member_type = self.inner_member_type.clone();
@@ -552,7 +557,7 @@ impl<'a> MetricBuilderContext<'a> {
 
     /// `fn get()` is only available when label is defined by `label_enum`.
     fn build_delegator_impl_get(&self) -> Tokens {
-        let enum_ident = self.label.get_enum_ident();
+        let enum_ident = self.next_label.and_then(|m| m.get_enum_ident());
         if let Some(e) = enum_ident {
             let member_type = &self.delegator_member_type;
             let match_patterns = self
@@ -561,7 +566,8 @@ impl<'a> MetricBuilderContext<'a> {
                 .unwrap()
                 .build_fields_with_path();
             let fields = self
-                .label
+                .next_label
+                .expect("should have next label here")
                 .get_value_def_list(self.enum_definitions)
                 .get_names();
             quote! {
