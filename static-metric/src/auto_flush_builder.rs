@@ -101,8 +101,8 @@ impl AutoFlushTokensBuilder {
 
         let auto_flush_delegator: Tokens =
             Self::build_auto_flush_delegator(metric, &builder_contexts);
-        let outer_struct: Tokens = Self::build_outer_struct(metric, &builder_contexts);
-        let outer_impl: Tokens = Self::build_outer_impl(metric, &builder_contexts);
+        let outer_struct: Tokens = Self::build_outer_struct(&builder_contexts);
+        let outer_impl: Tokens = Self::build_outer_impl(&builder_contexts);
         let scope_id = SCOPE_ID.fetch_add(1, Ordering::Relaxed);
         let scope_name = Ident::new(
             &format!("prometheus_static_scope_{}", scope_id),
@@ -219,14 +219,12 @@ impl AutoFlushTokensBuilder {
     }
 
     fn build_outer_struct(
-        metric: &MetricDef,
         builder_contexts: &Vec<MetricBuilderContext>,
     ) -> Tokens {
         builder_contexts[0].build_outer_struct()
     }
 
     fn build_outer_impl(
-        metric: &MetricDef,
         builder_contexts: &Vec<MetricBuilderContext>,
     ) -> Tokens {
         builder_contexts[0].build_outer_impl()
@@ -240,12 +238,9 @@ struct MetricBuilderContext<'a> {
     next_label: Option<&'a MetricLabelDef>,
     label_index: usize,
     is_last_label: bool,
-    is_secondary_last_label: bool,
     root_struct_name: Ident,
     struct_name: Ident,
-    member_type: Ident,
     delegator_member_type: Ident,
-    next_member_type: Ident,
     inner_member_type: Ident,
     inner_next_member_type: Ident,
 }
@@ -266,25 +261,12 @@ impl<'a> MetricBuilderContext<'a> {
             next_label: metric.labels.get(label_index + 1),
             label_index,
             is_last_label,
-            is_secondary_last_label,
             root_struct_name: util::get_label_struct_name(metric.struct_name.clone(), 0),
             struct_name: util::get_label_struct_name(metric.struct_name.clone(), label_index),
-            member_type: util::get_member_type(
-                metric.struct_name.clone(),
-                label_index,
-                metric.metric_type.clone(),
-                is_last_label,
-            ),
             delegator_member_type: util::get_delegator_member_type(
                 metric.struct_name.clone(),
                 label_index,
                 is_last_label,
-            ),
-            next_member_type: util::get_member_type(
-                metric.struct_name.clone(),
-                label_index,
-                metric.metric_type.clone(),
-                is_secondary_last_label,
             ),
             inner_member_type: util::get_inner_member_type(
                 metric.struct_name.clone(),
@@ -419,15 +401,6 @@ impl<'a> MetricBuilderContext<'a> {
                     }
                 }
             }
-        } else {
-            Tokens::new()
-        }
-    }
-
-    fn build_delegator_trait_impl(&self) -> Tokens {
-        let struct_name = self.delegator_struct_name();
-        if self.is_last_label {
-            quote! {}
         } else {
             Tokens::new()
         }
@@ -711,7 +684,7 @@ impl<'a> MetricBuilderContext<'a> {
 
         let member_types = if self.is_last_label {
             (1..=self.metric.labels.len())
-                .map(|suffix| self.delegator_member_type.clone())
+                .map(|_| self.delegator_member_type.clone())
                 .collect::<Vec<Ident>>()
         } else {
             self.metric.labels[self.label_index + 1]
