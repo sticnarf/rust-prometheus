@@ -104,6 +104,8 @@ impl AutoFlushTokensBuilder {
 
         let auto_flush_delegator: Tokens =
             Self::build_auto_flush_delegator(metric, &builder_contexts);
+        let outer_struct: Tokens =
+            Self::build_outer_struct(metric, &builder_contexts);
         let scope_id = SCOPE_ID.fetch_add(1, Ordering::Relaxed);
         let scope_name = Ident::new(
             &format!("prometheus_static_scope_{}", scope_id),
@@ -113,9 +115,11 @@ impl AutoFlushTokensBuilder {
         let visibility = &metric.visibility;
         let inner_struct_name =
             Ident::new(&format!("{}Inner", &metric.struct_name), Span::call_site());
+        let outer_struct_name = metric.struct_name.clone();
 
         quote! {
             #visibility use self::#scope_name::#inner_struct_name;
+            #visibility use self::#scope_name::#outer_struct_name;
 
             #[allow(dead_code)]
             mod #scope_name {
@@ -137,6 +141,7 @@ impl AutoFlushTokensBuilder {
                 )*
 
                 #auto_flush_delegator
+                #outer_struct
             }
         }
     }
@@ -213,6 +218,13 @@ impl AutoFlushTokensBuilder {
                 }
             }
         }
+    }
+
+    fn build_outer_struct(
+        metric: &MetricDef,
+        builder_contexts: &Vec<MetricBuilderContext>,
+    ) -> Tokens {
+        builder_contexts[0].build_outer_struct()
     }
 }
 
@@ -319,6 +331,25 @@ impl<'a> MetricBuilderContext<'a> {
                     pub #field_names: #member_types,
                 )*
                 #last_flush
+            }
+        }
+    }
+
+    fn build_outer_struct(&self) -> Tokens {
+        let outer_struct_name = self.struct_name.clone();
+        let inner_struct_name = self.inner_struct_name();
+        let delegator_name = self.delegator_struct_name();
+        let field_names = self
+            .label
+            .get_value_def_list(self.enum_definitions)
+            .get_names();
+
+        quote! {
+            pub struct #outer_struct_name {
+                inner: &'static LocalKey<#inner_struct_name>,
+                #(
+                  pub #field_names: #delegator_name,
+                )*
             }
         }
     }
