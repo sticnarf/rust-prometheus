@@ -82,16 +82,13 @@ impl AutoFlushTokensBuilder {
                 let inner_trait_impl = builder_context.build_inner_trait_impl();
                 let delegator_struct = builder_context.build_delegator_struct();
                 let delegator_impl = builder_context.build_delegator_impl();
-                //                let code_impl = builder_context.build_impl();
-                //                let code_trait_impl = builder_context.build_local_metric_impl();
                 quote! {
-                                    #inner_struct
-                                    #inner_impl
-                                    #inner_trait_impl
-                                    #delegator_struct
-                                    #delegator_impl
-                //                    #code_trait_impl
-                                }
+                            #inner_struct
+                            #inner_impl
+                            #inner_trait_impl
+                            #delegator_struct
+                            #delegator_impl
+                }
             })
             .collect();
 
