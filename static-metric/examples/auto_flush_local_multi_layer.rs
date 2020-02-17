@@ -27,6 +27,11 @@ pub enum Methods {
     delete,
 }
 
+pub enum FooBar {
+    foo,
+    bar,
+}
+
 #[allow(missing_copy_implementations)]
 pub struct LhrsInner {
     pub foo: LhrsInner2,

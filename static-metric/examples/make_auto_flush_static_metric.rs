@@ -16,6 +16,13 @@ use prometheus::*;
 use prometheus_static_metric::make_auto_flush_static_metric;
 
 make_auto_flush_static_metric! {
+
+
+    pub label_enum FooBar {
+        foo,
+        bar,
+    }
+
     pub label_enum Methods {
         post,
         get,
@@ -24,10 +31,7 @@ make_auto_flush_static_metric! {
     }
 
     pub struct Lhrs: LocalIntCounter {
-        "product" => {
-            foo,
-            bar,
-        },
+        "product" => FooBar,
         "method" => Methods,
         "version" => {
             http1: "HTTP/1",

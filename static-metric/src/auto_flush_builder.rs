@@ -104,8 +104,8 @@ impl AutoFlushTokensBuilder {
 
         let auto_flush_delegator: Tokens =
             Self::build_auto_flush_delegator(metric, &builder_contexts);
-        let outer_struct: Tokens =
-            Self::build_outer_struct(metric, &builder_contexts);
+        let outer_struct: Tokens = Self::build_outer_struct(metric, &builder_contexts);
+        let outer_impl: Tokens = Self::build_outer_impl(metric, &builder_contexts);
         let scope_id = SCOPE_ID.fetch_add(1, Ordering::Relaxed);
         let scope_name = Ident::new(
             &format!("prometheus_static_scope_{}", scope_id),
@@ -142,6 +142,7 @@ impl AutoFlushTokensBuilder {
 
                 #auto_flush_delegator
                 #outer_struct
+                #outer_impl
             }
         }
     }
@@ -225,6 +226,13 @@ impl AutoFlushTokensBuilder {
         builder_contexts: &Vec<MetricBuilderContext>,
     ) -> Tokens {
         builder_contexts[0].build_outer_struct()
+    }
+
+    fn build_outer_impl(
+        metric: &MetricDef,
+        builder_contexts: &Vec<MetricBuilderContext>,
+    ) -> Tokens {
+        builder_contexts[0].build_outer_impl()
     }
 }
 
@@ -379,6 +387,23 @@ impl<'a> MetricBuilderContext<'a> {
         }
     }
 
+    fn build_outer_impl(&self) -> Tokens {
+        let outer_struct_name = self.struct_name.clone();
+
+        let impl_from = self.build_outer_impl_from();
+        let impl_get = self.build_outer_impl_get();
+        quote! {
+            impl #outer_struct_name {
+                #impl_from
+                #impl_get
+
+                pub fn flush(&self) {
+                    self.inner.with(|m| m.flush())
+                }
+            }
+        }
+    }
+
     fn build_inner_trait_impl(&self) -> Tokens {
         let struct_name = self.inner_struct_name();
         if self.label_index == 0 {
@@ -495,11 +520,72 @@ impl<'a> MetricBuilderContext<'a> {
         }
     }
 
+    fn build_outer_impl_from(&self) -> Tokens {
+        let outer_struct_name = self.struct_name.clone();
+        let inner_struct_name = self.inner_struct_name();
+        let delegator_name = self.delegator_struct_name();
+        let inner_member_type = self.inner_member_type.clone();
+        let field_names = self
+            .label
+            .get_value_def_list(self.enum_definitions)
+            .get_names();
+
+        quote! {
+            pub fn from(inner: &'static LocalKey<#inner_struct_name>) -> Lhrs {
+                let x = unsafe { MaybeUninit::<#inner_struct_name>::uninit().assume_init() };
+                let branch_offset = &x as *const #inner_struct_name as usize;
+
+                #(
+                  let #field_names = #delegator_name::new(
+                  &inner,
+                  &(x.#field_names) as *const #inner_member_type as usize - branch_offset,
+                  );
+                )*
+                mem::forget(x);
+
+            #outer_struct_name {
+             inner,
+             #(
+                #field_names,
+             )*
+            }
+           }
+        }
+    }
+
     /// `fn get()` is only available when label is defined by `label_enum`.
     fn build_delegator_impl_get(&self) -> Tokens {
         let enum_ident = self.label.get_enum_ident();
         if let Some(e) = enum_ident {
             let member_type = &self.delegator_member_type;
+            let match_patterns = self
+                .enum_definitions
+                .get(e)
+                .unwrap()
+                .build_fields_with_path();
+            let fields = self
+                .label
+                .get_value_def_list(self.enum_definitions)
+                .get_names();
+            quote! {
+                pub fn get(&self, enum_value: #e) -> &#member_type {
+                    match enum_value {
+                        #(
+                            #match_patterns => &self.#fields,
+                        )*
+                    }
+                }
+            }
+        } else {
+            Tokens::new()
+        }
+    }
+
+    /// `fn get()` is only available when label is defined by `label_enum`.
+    fn build_outer_impl_get(&self) -> Tokens {
+        let enum_ident = self.label.get_enum_ident();
+        if let Some(e) = enum_ident {
+            let member_type = &self.delegator_struct_name();
             let match_patterns = self
                 .enum_definitions
                 .get(e)
