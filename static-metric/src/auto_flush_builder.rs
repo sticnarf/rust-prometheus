@@ -95,6 +95,15 @@ impl AutoFlushTokensBuilder {
             })
             .collect();
 
+        let builder_contexts: Vec<MetricBuilderContext> = metric
+            .labels
+            .iter()
+            .enumerate()
+            .map(|(i, _)| MetricBuilderContext::new(metric, enum_definitions, i))
+            .collect();
+
+        let auto_flush_delegator: Tokens =
+            Self::build_auto_flush_delegator(metric, &builder_contexts);
         let scope_id = SCOPE_ID.fetch_add(1, Ordering::Relaxed);
         let scope_name = Ident::new(
             &format!("prometheus_static_scope_{}", scope_id),
@@ -126,6 +135,82 @@ impl AutoFlushTokensBuilder {
                 #(
                     #label_struct
                 )*
+
+                #auto_flush_delegator
+            }
+        }
+    }
+
+    fn build_auto_flush_delegator(
+        metric: &MetricDef,
+        builder_contexts: &Vec<MetricBuilderContext>,
+    ) -> Tokens {
+        let inner_struct = &builder_contexts[0].inner_struct_name();
+        let last_builder_contexts = &builder_contexts
+            .last()
+            .expect("builder contexts should not be empty");
+        let last_delegator = last_builder_contexts.delegator_struct_name();
+        let metric_type = metric.metric_type.clone();
+
+        fn offset_fetcher(builder_context: &MetricBuilderContext) -> Tokens {
+            let struct_type = builder_context.inner_struct_name();
+            let struct_var_name = Ident::new(
+                struct_type.to_string().to_lowercase().as_str(),
+                Span::call_site(),
+            );
+
+            let member_type = builder_context.inner_member_type.clone();
+            let member_var_name = Ident::new(
+                member_type.to_string().to_lowercase().as_str(),
+                Span::call_site(),
+            );
+            let offset = Ident::new(
+                &format!("offset{}", builder_context.label_index + 1),
+                Span::call_site(),
+            );
+            let head = if builder_context.label_index == 0 {
+                quote! {
+                    let #struct_var_name = root_metric as *const #struct_type;
+                }
+            } else {
+                Tokens::new()
+            };
+
+            let body = quote! {
+                let #member_var_name = (#struct_var_name as usize + self.#offset) as *const #member_type;
+            };
+
+            let tail = if builder_context.is_last_label {
+                quote! {
+                    &*#member_var_name
+                }
+            } else {
+                Tokens::new()
+            };
+
+            quote! {
+                #head
+                #body
+                #tail
+            }
+        }
+
+        let offset_fetchers = builder_contexts
+            .iter()
+            .map(|m| offset_fetcher(m))
+            .collect::<Vec<Tokens>>();
+        quote! {
+            impl AFLocalCounterDelegator<#inner_struct, #metric_type> for #last_delegator {
+                fn get_root_metric(&self) -> &'static LocalKey<#inner_struct> {
+                    self.root
+                }
+                fn get_counter<'a>(&self, root_metric: &'a #inner_struct) -> &'a #metric_type {
+                   unsafe {
+                    #(
+                      #offset_fetchers
+                    )*
+                   }
+                }
             }
         }
     }
@@ -215,7 +300,10 @@ impl<'a> MetricBuilderContext<'a> {
             .label
             .get_value_def_list(self.enum_definitions)
             .get_names();
-        let member_types: Vec<_> = field_names.iter().map(|_| &self.inner_member_type).collect();
+        let member_types: Vec<_> = field_names
+            .iter()
+            .map(|_| &self.inner_member_type)
+            .collect();
         let last_flush = if self.label_index == 0 {
             quote! {
                 last_flush: Cell<Instant>,
@@ -253,11 +341,11 @@ impl<'a> MetricBuilderContext<'a> {
         let impl_get = self.build_delegator_impl_get();
 
         quote! {
-                    impl #struct_name {
-                        #impl_new
-                        #impl_get
-                    }
-                }
+            impl #struct_name {
+                #impl_new
+                #impl_get
+            }
+        }
     }
 
     fn build_inner_trait_impl(&self) -> Tokens {
@@ -276,6 +364,15 @@ impl<'a> MetricBuilderContext<'a> {
                     }
                 }
             }
+        } else {
+            Tokens::new()
+        }
+    }
+
+    fn build_delegator_trait_impl(&self) -> Tokens {
+        let struct_name = self.delegator_struct_name();
+        if self.is_last_label {
+            quote! {}
         } else {
             Tokens::new()
         }
@@ -312,19 +409,17 @@ impl<'a> MetricBuilderContext<'a> {
         let delegator_member = self.delegator_member_type.clone();
         let member_type = self.inner_member_type.clone();
         let next_member_type = self.inner_next_member_type.clone();
-        let known_offsets =
-            (1..=(self.label_index + 1))
-                .map(|m| {
-                    let res = Ident::new(&format!("offset{}", m), Span::call_site());
-                    res
-                })
-                .collect::<Vec<Ident>>();
-        let known_offsets_tokens =
-            quote! {
-                  #(
-                  #known_offsets,
-                  )*
-                };
+        let known_offsets = (1..=(self.label_index + 1))
+            .map(|m| {
+                let res = Ident::new(&format!("offset{}", m), Span::call_site());
+                res
+            })
+            .collect::<Vec<Ident>>();
+        let known_offsets_tokens = quote! {
+          #(
+          #known_offsets,
+          )*
+        };
         if self.is_last_label {
             quote! {
                 pub fn new(
@@ -496,18 +591,14 @@ impl<'a> MetricBuilderContext<'a> {
 
         let member_types = if self.is_last_label {
             (1..=self.metric.labels.len())
-                .map(|suffix| {
-                    self.delegator_member_type.clone()
-                })
+                .map(|suffix| self.delegator_member_type.clone())
                 .collect::<Vec<Ident>>()
         } else {
             self.metric.labels[self.label_index + 1]
                 .get_value_def_list(self.enum_definitions)
                 .get_names()
                 .iter()
-                .map(|_| {
-                    self.delegator_member_type.clone()
-                })
+                .map(|_| self.delegator_member_type.clone())
                 .collect::<Vec<Ident>>()
         };
         let root = if self.is_last_label {

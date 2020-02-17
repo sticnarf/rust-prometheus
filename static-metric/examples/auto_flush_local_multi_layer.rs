@@ -207,7 +207,12 @@ impl LhrsDelegator2 {
 }
 
 impl LhrsDelegator3 {
-    fn new(root: &'static LocalKey<LhrsInner>, offset1: usize, offset2: usize, offset3: usize) -> LhrsDelegator3 {
+    fn new(
+        root: &'static LocalKey<LhrsInner>,
+        offset1: usize,
+        offset2: usize,
+        offset3: usize,
+    ) -> LhrsDelegator3 {
         LhrsDelegator3 {
             root,
             offset1,
@@ -224,8 +229,8 @@ impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
 
     fn get_counter<'a>(&self, root_metric: &'a LhrsInner) -> &'a LocalIntCounter {
         unsafe {
-            let inner2 =
-                (root_metric as *const LhrsInner as usize + self.offset1) as *const LhrsInner2;
+            let inner1 = root_metric as *const LhrsInner;
+            let inner2 = (inner1 as usize + self.offset1) as *const LhrsInner2;
             let inner3 = (inner2 as usize + self.offset2) as *const LhrsInner3;
             let counter = (inner3 as usize + self.offset3) as *const LocalIntCounter;
             &*counter
