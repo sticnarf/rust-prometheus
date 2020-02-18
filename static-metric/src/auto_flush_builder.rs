@@ -218,15 +218,11 @@ impl AutoFlushTokensBuilder {
         }
     }
 
-    fn build_outer_struct(
-        builder_contexts: &Vec<MetricBuilderContext>,
-    ) -> Tokens {
+    fn build_outer_struct(builder_contexts: &Vec<MetricBuilderContext>) -> Tokens {
         builder_contexts[0].build_outer_struct()
     }
 
-    fn build_outer_impl(
-        builder_contexts: &Vec<MetricBuilderContext>,
-    ) -> Tokens {
+    fn build_outer_impl(builder_contexts: &Vec<MetricBuilderContext>) -> Tokens {
         builder_contexts[0].build_outer_impl()
     }
 }

@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::atomic64::{Atomic, AtomicF64, AtomicI64, Number};
 use crate::desc::Desc;
@@ -289,6 +289,87 @@ pub trait AFLocalCounterDelegator<T: 'static + MayFlush, V: CounterWithValueType
     /// trigger flush of LocalKey<T>
     #[inline]
     fn flush(&self) {
+        self.get_root_metric().with(|m| m.flush())
+    }
+}
+
+///delegator for auto flush-able local counter
+pub trait AFLCDelegator<T: 'static + MayFlush, V: CounterWithValueType> {
+    ///get the root local metric for delegate
+    fn get_root_metric(&self) -> &'static LocalKey<T>;
+
+    ///get the final counter for delegate
+    fn get_counter<'a>(&self, root_metric: &'a T) -> &'a GenericLocalCounter<V::ValueType>;
+}
+
+///auto flush-able local counter
+#[derive(Debug)]
+pub struct AFLocalCounter<T: 'static + MayFlush, V: CounterWithValueType, D: AFLCDelegator<T, V>> {
+    ///delegator to get thread local metric
+    pub delegator: D,
+    ///phantomdata marker
+    pub _p: std::marker::PhantomData<(Mutex<T>, Mutex<V>)>,
+}
+
+///auto flush-able local counter
+impl<T: 'static + MayFlush, V: CounterWithValueType, D: AFLCDelegator<T, V>> AFLocalCounter<T, V, D> {
+    #[inline]
+    ///get the root local metric for delegate
+    fn get_root_metric(&self) -> &'static LocalKey<T> {
+        self.delegator.get_root_metric()
+    }
+    #[inline]
+    ///get the final counter for delegate
+    fn get_counter<'a>(&self, root_metric: &'a T) -> &'a GenericLocalCounter<V::ValueType> {
+        self.delegator.get_counter(root_metric)
+    }
+
+    /// Increase the given value to the local counter,
+    /// and try to flush to global
+    /// # Panics
+    ///
+    /// Panics in debug build if the value is < 0.
+    #[inline]
+    pub fn inc_by(&self, v: <V::ValueType as Atomic>::T) {
+        self.get_root_metric().with(|m| {
+            let counter = self.get_counter(m);
+            counter.inc_by(v);
+            m.may_flush();
+        })
+    }
+
+    /// Increase the local counter by 1,
+    /// and try to flush to global.
+    #[inline]
+    pub fn inc(&self) {
+        self.get_root_metric().with(|m| {
+            let counter = self.get_counter(m);
+            counter.inc();
+            m.may_flush();
+        })
+    }
+
+    /// Return the local counter value.
+    #[inline]
+    pub fn get(&self) {
+        self.get_root_metric().with(|m| {
+            let counter = self.get_counter(m);
+            counter.get();
+        })
+    }
+
+    /// Restart the counter, resetting its value back to 0.
+    #[inline]
+    pub fn reset(&self) {
+        self.get_root_metric().with(|m| {
+            let counter = self.get_counter(m);
+            counter.reset();
+        })
+    }
+
+    /// trigger flush of LocalKey<T>
+    #[inline]
+    pub fn flush(&self) {
         self.get_root_metric().with(|m| m.flush())
     }
 }
