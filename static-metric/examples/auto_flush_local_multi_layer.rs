@@ -9,6 +9,7 @@ extern crate prometheus_static_metric;
 use std::cell::Cell;
 
 use coarsetime::Instant;
+use prometheus::core::*;
 #[allow(unused_imports)]
 use prometheus::local::*;
 use prometheus::*;
@@ -64,8 +65,8 @@ pub struct LhrsDelegator {
 }
 
 pub struct LhrsDelegator2 {
-    pub http1: AFLocalCounter<LhrsInner, LocalIntCounter, LhrsDelegator3>,
-    pub http2: AFLocalCounter<LhrsInner, LocalIntCounter, LhrsDelegator3>,
+    pub http1: AFLocalCounter<LhrsInner, AtomicI64, LhrsDelegator3>,
+    pub http2: AFLocalCounter<LhrsInner, AtomicI64, LhrsDelegator3>,
 }
 
 pub struct LhrsDelegator3 {
@@ -220,7 +221,7 @@ impl LhrsDelegator3 {
         offset1: usize,
         offset2: usize,
         offset3: usize,
-    ) -> AFLocalCounter<LhrsInner, LocalIntCounter, LhrsDelegator3> {
+    ) -> AFLocalCounter<LhrsInner, AtomicI64, LhrsDelegator3> {
         let delegator = LhrsDelegator3 {
             root,
             offset1,
@@ -230,7 +231,7 @@ impl LhrsDelegator3 {
 
         AFLocalCounter {
             delegator,
-            _p:std::marker::PhantomData,
+            _p: std::marker::PhantomData,
         }
     }
 }
@@ -251,7 +252,7 @@ impl LhrsDelegator3 {
 //    }
 //}
 
-impl AFLCDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
+impl AFLCDelegator<LhrsInner, AtomicI64> for LhrsDelegator3 {
     fn get_root_metric(&self) -> &'static LocalKey<LhrsInner> {
         self.root
     }
