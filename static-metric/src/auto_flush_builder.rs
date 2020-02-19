@@ -207,7 +207,7 @@ impl AutoFlushTokensBuilder {
                 fn get_root_metric(&self) -> &'static LocalKey<#inner_struct> {
                     self.root
                 }
-                fn get_counter<'a>(&self, root_metric: &'a #inner_struct) -> &'a #metric_type {
+                fn get_local<'a>(&self, root_metric: &'a #inner_struct) -> &'a #metric_type {
                    unsafe {
                     #(
                       #offset_fetchers
