@@ -202,8 +202,21 @@ impl AutoFlushTokensBuilder {
             .iter()
             .map(|m| offset_fetcher(m))
             .collect::<Vec<Tokens>>();
+
+        //todo: for both counter and histogram
+        //AFLHistogramDelegator<LhrsInner>
+        let delegator_tokens = if metric_type.to_string().contains("Counter") {
+            quote! {
+                AFLDelegator<#inner_struct, #metric_type>
+            }
+        } else {
+            quote! {
+                AFLHistogramDelegator<#inner_struct>
+            }
+        };
+
         quote! {
-            impl AFLDelegator<#inner_struct, #metric_type> for #last_delegator {
+            impl #delegator_tokens for #last_delegator {
                 fn get_root_metric(&self) -> &'static LocalKey<#inner_struct> {
                     self.root
                 }
@@ -451,18 +464,41 @@ impl<'a> MetricBuilderContext<'a> {
           )*
         };
         if self.is_last_label {
+            //TODO for histogram
+            //AFLocalHistogram<LhrsInner, LhrsDelegator3>
+
+            let local_id = if metric_type.to_string().contains("Counter") {
+                quote! {
+                    AFLocalCounter
+                }
+            } else {
+                quote! {
+                    AFLocalHistogram
+                }
+            };
+
+            let local_tokens = if metric_type.to_string().contains("Counter") {
+                quote! {
+                    #local_id<#inner_name,#metric_type,#delegator_name>
+                }
+            } else {
+                quote! {
+                    #local_id<#inner_name, #delegator_name>
+                }
+            };
+
             quote! {
             pub fn new(
                         root: &'static LocalKey<#inner_name>,
                             #(
                               #known_offsets : usize,
                             )*
-                        ) -> AFLocalCounter<#inner_name,#metric_type,#delegator_name> {
+                        ) -> #local_tokens {
                             let delegator = #delegator_name {
                                 root,
                                 #known_offsets_tokens
                             };
-                           AFLocalCounter {
+                           #local_id {
                             delegator,
                             _p:std::marker::PhantomData,
                           }
@@ -694,8 +730,19 @@ impl<'a> MetricBuilderContext<'a> {
             (1..=self.metric.labels.len())
                 .map(|_| {
                     let delegator_member_type = self.delegator_member_type.clone();
-                    quote! {
-                        AFLocalCounter<#inner_root_name,#metric_type,#delegator_member_type>
+                    //todo for histogram
+                    //AFLocalHistogram<LhrsInner, LhrsDelegator3>
+                    //                    quote! {
+                    //                        AFLocalCounter<#inner_root_name,#metric_type,#delegator_member_type>
+                    //                    };
+                    if metric_type.to_string().contains("Counter") {
+                        quote! {
+                            AFLocalCounter<#inner_root_name,#metric_type,#delegator_member_type>
+                        }
+                    } else {
+                        quote! {
+                            AFLocalHistogram<#inner_root_name,#delegator_member_type>
+                        }
                     }
                 })
                 .collect::<Vec<_>>()

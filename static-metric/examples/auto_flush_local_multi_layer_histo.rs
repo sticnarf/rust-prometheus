@@ -324,11 +324,17 @@ fn main() {
         3
     );
 
-    assert!(HTTP_HISTO_VEC
+    assert!(
+        HTTP_HISTO_VEC
             .with_label_values(&["foo", "post", "HTTP/1"])
-            .get_sample_sum() > 2.9);
+            .get_sample_sum()
+            > 2.9
+    );
 
-    assert!(HTTP_HISTO_VEC
-        .with_label_values(&["foo", "post", "HTTP/1"])
-        .get_sample_sum() < 3.1);
+    assert!(
+        HTTP_HISTO_VEC
+            .with_label_values(&["foo", "post", "HTTP/1"])
+            .get_sample_sum()
+            < 3.1
+    );
 }
