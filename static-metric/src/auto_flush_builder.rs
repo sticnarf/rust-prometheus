@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use proc_macro2::{Span, TokenStream as Tokens};
-use quote::TokenStreamExt;
+use quote::{ToTokens, TokenStreamExt};
 use syn::{Ident, Visibility};
 
 use super::parser::*;
@@ -203,7 +203,7 @@ impl AutoFlushTokensBuilder {
             .map(|m| offset_fetcher(m))
             .collect::<Vec<Tokens>>();
         quote! {
-            impl AFLocalCounterDelegator<#inner_struct, #metric_type> for #last_delegator {
+            impl AFLDelegator<#inner_struct, #metric_type> for #last_delegator {
                 fn get_root_metric(&self) -> &'static LocalKey<#inner_struct> {
                     self.root
                 }
@@ -234,6 +234,7 @@ struct MetricBuilderContext<'a> {
     next_label: Option<&'a MetricLabelDef>,
     label_index: usize,
     is_last_label: bool,
+    is_secondary_last_label: bool,
     root_struct_name: Ident,
     struct_name: Ident,
     delegator_member_type: Ident,
@@ -257,6 +258,7 @@ impl<'a> MetricBuilderContext<'a> {
             next_label: metric.labels.get(label_index + 1),
             label_index,
             is_last_label,
+            is_secondary_last_label,
             root_struct_name: util::get_label_struct_name(metric.struct_name.clone(), 0),
             struct_name: util::get_label_struct_name(metric.struct_name.clone(), label_index),
             delegator_member_type: util::get_delegator_member_type(
@@ -436,6 +438,7 @@ impl<'a> MetricBuilderContext<'a> {
         let delegator_member = self.delegator_member_type.clone();
         let member_type = self.inner_member_type.clone();
         let next_member_type = self.inner_next_member_type.clone();
+        let metric_type = self.metric.metric_type.clone();
         let known_offsets = (1..=(self.label_index + 1))
             .map(|m| {
                 let res = Ident::new(&format!("offset{}", m), Span::call_site());
@@ -449,17 +452,21 @@ impl<'a> MetricBuilderContext<'a> {
         };
         if self.is_last_label {
             quote! {
-                pub fn new(
-                    root: &'static LocalKey<#inner_name>,
-                    #(
-                      #known_offsets : usize,
-                    )*
-                ) -> #delegator_name {
-                  #delegator_name {
-                        root,
-                        #known_offsets_tokens
-                    }
-                }
+            pub fn new(
+                        root: &'static LocalKey<#inner_name>,
+                            #(
+                              #known_offsets : usize,
+                            )*
+                        ) -> AFLocalCounter<#inner_name,#metric_type,#delegator_name> {
+                            let delegator = #delegator_name {
+                                root,
+                                #known_offsets_tokens
+                            };
+                           AFLocalCounter {
+                            delegator,
+                            _p:std::marker::PhantomData,
+                          }
+                        }
             }
         } else {
             let delegator_field_names = &self.delegator_field_names();
@@ -670,6 +677,7 @@ impl<'a> MetricBuilderContext<'a> {
             &format!("{}Inner", &self.root_struct_name),
             Span::call_site(),
         );
+        let metric_type = self.metric.metric_type.clone();
         let field_names = if self.is_last_label {
             (1..=self.metric.labels.len())
                 .map(|suffix| Ident::new(&format!("offset{}", suffix), Span::call_site()))
@@ -680,15 +688,27 @@ impl<'a> MetricBuilderContext<'a> {
 
         let member_types = if self.is_last_label {
             (1..=self.metric.labels.len())
-                .map(|_| self.delegator_member_type.clone())
-                .collect::<Vec<Ident>>()
+                .map(|_| self.delegator_member_type.clone().to_token_stream())
+                .collect::<Vec<Tokens>>()
+        } else if self.is_secondary_last_label {
+            (1..=self.metric.labels.len())
+                .map(|_| {
+                    let delegator_member_type = self.delegator_member_type.clone();
+                    quote! {
+                        AFLocalCounter<#inner_root_name,#metric_type,#delegator_member_type>
+                    }
+                })
+                .collect::<Vec<_>>()
         } else {
             self.metric.labels[self.label_index + 1]
                 .get_value_def_list(self.enum_definitions)
                 .get_names()
                 .iter()
-                .map(|_| self.delegator_member_type.clone())
-                .collect::<Vec<Ident>>()
+                .map(|_| {
+                    let member_type = self.delegator_member_type.clone();
+                    member_type.to_token_stream()
+                })
+                .collect::<Vec<_>>()
         };
         let root = if self.is_last_label {
             quote! {

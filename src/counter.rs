@@ -294,7 +294,7 @@ pub trait AFLocalCounterDelegator<T: 'static + MayFlush, V: CounterWithValueType
 }
 
 ///delegator for auto flush-able local counter
-pub trait AFLCDelegator<T: 'static + MayFlush, V: CounterWithValueType> {
+pub trait AFLDelegator<T: 'static + MayFlush, V: CounterWithValueType> {
     ///get the root local metric for delegate
     fn get_root_metric(&self) -> &'static LocalKey<T>;
 
@@ -304,7 +304,7 @@ pub trait AFLCDelegator<T: 'static + MayFlush, V: CounterWithValueType> {
 
 ///auto flush-able local counter
 #[derive(Debug)]
-pub struct AFLocalCounter<T: 'static + MayFlush, V: CounterWithValueType, D: AFLCDelegator<T, V>> {
+pub struct AFLocalCounter<T: 'static + MayFlush, V: CounterWithValueType, D: AFLDelegator<T, V>> {
     ///delegator to get thread local metric
     pub delegator: D,
     ///phantomdata marker
@@ -312,7 +312,9 @@ pub struct AFLocalCounter<T: 'static + MayFlush, V: CounterWithValueType, D: AFL
 }
 
 ///auto flush-able local counter
-impl<T: 'static + MayFlush, V: CounterWithValueType, D: AFLCDelegator<T, V>> AFLocalCounter<T, V, D> {
+impl<T: 'static + MayFlush, V: CounterWithValueType, D: AFLDelegator<T, V>>
+    AFLocalCounter<T, V, D>
+{
     #[inline]
     ///get the root local metric for delegate
     fn get_root_metric(&self) -> &'static LocalKey<T> {

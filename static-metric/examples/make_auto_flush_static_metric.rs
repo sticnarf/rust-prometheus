@@ -13,7 +13,6 @@ extern crate prometheus_static_metric;
 
 use prometheus::*;
 use prometheus_static_metric::make_auto_flush_static_metric;
-use prometheus::local::AFLocalCounterDelegator;
 
 make_auto_flush_static_metric! {
 

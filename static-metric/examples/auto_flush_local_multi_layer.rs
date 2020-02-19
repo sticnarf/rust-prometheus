@@ -230,28 +230,12 @@ impl LhrsDelegator3 {
 
         AFLocalCounter {
             delegator,
-            _p:std::marker::PhantomData,
+            _p: std::marker::PhantomData,
         }
     }
 }
 
-//impl AFLocalCounterDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
-//    fn get_root_metric(&self) -> &'static LocalKey<LhrsInner> {
-//        self.root
-//    }
-//
-//    fn get_counter<'a>(&self, root_metric: &'a LhrsInner) -> &'a LocalIntCounter {
-//        unsafe {
-//            let inner1 = root_metric as *const LhrsInner;
-//            let inner2 = (inner1 as usize + self.offset1) as *const LhrsInner2;
-//            let inner3 = (inner2 as usize + self.offset2) as *const LhrsInner3;
-//            let counter = (inner3 as usize + self.offset3) as *const LocalIntCounter;
-//            &*counter
-//        }
-//    }
-//}
-
-impl AFLCDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
+impl AFLDelegator<LhrsInner, LocalIntCounter> for LhrsDelegator3 {
     fn get_root_metric(&self) -> &'static LocalKey<LhrsInner> {
         self.root
     }
