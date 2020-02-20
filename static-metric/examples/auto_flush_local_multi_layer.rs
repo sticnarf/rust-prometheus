@@ -1,6 +1,6 @@
 // Copyright 2019 TiKV Project Authors. Licensed under Apache-2.0.
 
-///pseudo macro expanded code of make_auto_flush_static_metric.rs
+/// Pseudo macro expanded code of make_auto_flush_static_metric.rs
 #[macro_use]
 extern crate lazy_static;
 extern crate coarsetime;

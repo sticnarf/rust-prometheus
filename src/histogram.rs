@@ -876,21 +876,21 @@ impl LocalHistogram {
     }
 }
 
-///delegator for auto flush-able local counter
+/// Delegator for auto flush-able local counter
 pub trait AFLHistogramDelegator<T: 'static + MayFlush> {
-    ///get the root local metric for delegate
+    /// Get the root local metric for delegate
     fn get_root_metric(&self) -> &'static LocalKey<T>;
 
-    ///get the final counter for delegate
+    /// Get the final counter for delegate
     fn get_local<'a>(&self, root_metric: &'a T) -> &'a LocalHistogram;
 }
 
-///auto flush-able local counter
+/// Auto flush-able local counter
 #[derive(Debug)]
 pub struct AFLocalHistogram<T: 'static + MayFlush, D: AFLHistogramDelegator<T>> {
-    ///delegator to get thread local metric
+    /// Delegator to get thread local metric
     pub delegator: D,
-    ///phantomdata marker
+    /// Phantomdata marker
     pub _p: std::marker::PhantomData<Mutex<T>>,
 }
 

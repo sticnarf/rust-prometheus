@@ -235,35 +235,35 @@ impl<P: Atomic> GenericLocalCounter<P> {
     }
 }
 
-///delegator for auto flush-able local counter
+/// Delegator for auto flush-able local counter
 pub trait AFLDelegator<T: 'static + MayFlush, V: CounterWithValueType> {
-    ///get the root local metric for delegate
+    /// Get the root local metric for delegate
     fn get_root_metric(&self) -> &'static LocalKey<T>;
 
-    ///get the final counter for delegate
+    /// Get the final counter for delegate
     fn get_local<'a>(&self, root_metric: &'a T) -> &'a GenericLocalCounter<V::ValueType>;
 }
 
-///auto flush-able local counter
+/// Auto flush-able local counter
 #[derive(Debug)]
 pub struct AFLocalCounter<T: 'static + MayFlush, V: CounterWithValueType, D: AFLDelegator<T, V>> {
-    ///delegator to get thread local metric
+    /// Delegator to get thread local metric
     pub delegator: D,
-    ///phantomdata marker
+    /// Phantomdata marker
     pub _p: std::marker::PhantomData<(Mutex<T>, Mutex<V>)>,
 }
 
-///auto flush-able local counter
+/// Auto flush-able local counter
 impl<T: 'static + MayFlush, V: CounterWithValueType, D: AFLDelegator<T, V>>
     AFLocalCounter<T, V, D>
 {
     #[inline]
-    ///get the root local metric for delegate
+    /// Get the root local metric for delegate
     fn get_root_metric(&self) -> &'static LocalKey<T> {
         self.delegator.get_root_metric()
     }
     #[inline]
-    ///get the final counter for delegate
+    /// Get the final counter for delegate
     fn get_counter<'a>(&self, root_metric: &'a T) -> &'a GenericLocalCounter<V::ValueType> {
         self.delegator.get_local(root_metric)
     }
