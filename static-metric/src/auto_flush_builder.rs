@@ -574,8 +574,28 @@ impl<'a> MetricBuilderContext<'a> {
     /// `fn get()` is only available when label is defined by `label_enum`.
     fn build_delegator_impl_get(&self) -> Tokens {
         let enum_ident = self.next_label.and_then(|m| m.get_enum_ident());
+        let inner_root_name = Ident::new(
+            &format!("{}Inner", &self.root_struct_name),
+            Span::call_site(),
+        );
+        let metric_type = self.metric.metric_type.clone();
+
         if let Some(e) = enum_ident {
-            let member_type = &self.delegator_member_type;
+            let delegator_member_type = &self.delegator_member_type;
+            let member_type = if self.is_secondary_last_label {
+                if metric_type.to_string().contains("Counter") {
+                    quote! {
+                        AFLocalCounter<#inner_root_name,#metric_type,#delegator_member_type>
+                    }
+                } else {
+                    quote! {
+                        AFLocalHistogram<#inner_root_name,#delegator_member_type>
+                    }
+                }
+            } else {
+                delegator_member_type.into_token_stream()
+            };
+
             let match_patterns = self
                 .enum_definitions
                 .get(e)
