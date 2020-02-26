@@ -750,7 +750,8 @@ impl<'a> MetricBuilderContext<'a> {
                 .map(|_| self.delegator_member_type.clone().to_token_stream())
                 .collect::<Vec<Tokens>>()
         } else if self.is_secondary_last_label {
-            (1..=self.metric.labels.len())
+            self.delegator_field_names()
+                .iter()
                 .map(|_| {
                     let delegator_member_type = self.delegator_member_type.clone();
 
@@ -766,9 +767,7 @@ impl<'a> MetricBuilderContext<'a> {
                 })
                 .collect::<Vec<_>>()
         } else {
-            self.metric.labels[self.label_index + 1]
-                .get_value_def_list(self.enum_definitions)
-                .get_names()
+            self.delegator_field_names()
                 .iter()
                 .map(|_| {
                     let member_type = self.delegator_member_type.clone();
