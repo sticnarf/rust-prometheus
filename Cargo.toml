@@ -46,4 +46,7 @@ hyper = "0.12"
 protobuf-codegen-pure = { version = "2.0", optional = true }
 
 [workspace]
-members = ["static-metric"]
+members = [
+    "static-metric",
+    "static-metric/proc-macros",
+]
